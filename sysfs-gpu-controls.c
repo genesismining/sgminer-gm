@@ -21,6 +21,15 @@ int sysfs_set_engineclock(int gpu, int iEngineClock) { }
 int sysfs_set_memoryclock(int gpu, int iMemoryClock) { }
 int sysfs_set_powertune(int gpu, int iPercentage) { }
 
+#ifndef __linux__
+
+void GetGPUHWMonPath(char **HWMonPath, uint32_t GPUIdx)
+{
+	*HWMonPath = NULL;
+}
+
+#else
+
 // Must be freed by caller unless NULL
 void GetGPUHWMonPath(char **HWMonPath, uint32_t GPUIdx)
 {
@@ -53,6 +62,8 @@ void GetGPUHWMonPath(char **HWMonPath, uint32_t GPUIdx)
 	sprintf(*HWMonPath, "/sys/class/drm/card%d/device/hwmon/%s", GPUIdx, inner_hwmon->d_name);
 	return;
 }
+
+#endif
 
 int ReadSysFSFile(uint8_t *Buffer, char *Filename, uint32_t BufSize)
 {
