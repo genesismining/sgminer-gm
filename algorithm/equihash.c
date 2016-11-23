@@ -135,24 +135,6 @@ void equihash_calc_hash(uint8_t hash[25], uint64_t mid_hash[8], uint32_t bday) {
   memcpy(hash, tmp + (bday & 1 ? 25 : 0), 25);
 }
 
-void equihash_sort_indices(uint32_t* indices) {
-  for (int i = 0; i < 512; i++)
-    indices[i] = htobe32(indices[i]);
-  uint32_t tmp[256];
-  for (int len = 1; len <= 256; len *= 2){
-    for (int i = 0; i < 512; i += 2*len) {
-      bool is_before = (memcmp(indices + i, indices + i + len, 4*len) < 0);
-      if (is_before)
-        continue;
-      for (int j = i; j < i + len; j++) {
-        uint32_t tmp = indices[j + len];
-        indices[j + len] = indices[j];
-        indices[j] = tmp;
-      }
-    }
-  }
-}
-
 
 // These two copied from the ref impl, for now.
 void ExpandArray(const unsigned char* in, size_t in_len,
@@ -231,71 +213,6 @@ void CompressArray(const unsigned char* in, size_t in_len,
 }
 
 
-bool submit_tested_work(struct thr_info *, struct work *);
-int equihash_check_solutions(struct work *work, uint32_t* indices, uint64_t *mid_hash) {
-  int count = 0;
-  uint8_t hash[10][512][25];
-  uint32_t found_idx = work->pool->algorithm.found_idx;
-  /*
-  for (int i = 0; i < MIN(indices[found_idx], found_idx / 512); i++) {
-    for (int j = 0; j < 512; j++) {
-      equihash_calc_hash(hash[0][j], mid_hash, indices[512*i + j]);
-    }
-    for (int depth = 1; depth < 10; depth++) {
-      for (int j = 0; j < (1 << (9 - depth)); j++) {
-        for (int u = 0; u < 25; u++)
-          hash[depth][j][u] = hash[depth-1][2*j][u] ^ hash[depth-1][2*j+1][u];
-                
-        int k = 0;
-        for (; k < (depth + (depth == 9 ? 1 : 0)) * 20 / 8; k++)
-          if (hash[depth][j][k] != 0)
-            goto out;
-        if ((depth * 20 % 8) && (hash[depth][j][k] & 0xf0))
-          goto out;
-      }
-    }
-    count++;
-    equihash_sort_indices(indices + 512*i);
-    CompressArray((unsigned char*) (indices + 512*i), 512*4, work->equihash_data + 143, 1344, 21, 1);
-    gen_hash(work->equihash_data, 1344 + 143, work->hash); 
-    if (*(uint64_t*) (work->hash + 24) < *(uint64_t*) (work->target + 24))
-      submit_tested_work(work->thr, work);
-out:
-    continue;
-  }
-  return count; */
-  
-  for (int i = 0; i < MIN(indices[found_idx], found_idx / 512); i++) {
-    equihash_sort_indices(indices + 512*i);
-    CompressArray((unsigned char*) (indices + 512*i), 512*4, work->equihash_data + 143, 1344, 21, 1);
-    gen_hash(work->equihash_data, 1344 + 143, work->hash); 
-    if (*(uint64_t*) (work->hash + 24) >= *(uint64_t*) (work->target + 24))
-      continue;
-    for (int j = 0; j < 512; j++) {
-      equihash_calc_hash(hash[0][j], mid_hash, be32toh(indices[512*i + j]));
-    }
-    for (int depth = 1; depth < 10; depth++) {
-      for (int j = 0; j < (1 << (9 - depth)); j++) {
-        for (int u = 0; u < 25; u++)
-          hash[depth][j][u] = hash[depth-1][2*j][u] ^ hash[depth-1][2*j+1][u];
-                
-        int k = 0;
-        for (; k < (depth + (depth == 9 ? 1 : 0)) * 20 / 8; k++)
-          if (hash[depth][j][k] != 0)
-            goto out;
-        if ((depth * 20 % 8) && (hash[depth][j][k] & 0xf0))
-          goto out;
-      }
-    }
-    submit_tested_work(work->thr, work);
-out:
-    continue;
-  }
-  return 1;
-}
-
-
-
 static inline void sort_pair(uint32_t *a, uint32_t len)
 {
   uint32_t    *b = a + len;
@@ -313,8 +230,9 @@ static inline void sort_pair(uint32_t *a, uint32_t len)
 }
 
 
-#include "kernel/equihash-param.h"
-uint32_t verify_sol(struct work *work, sols_t *sols, int sol_i)
+bool submit_tested_work(struct thr_info *, struct work *);
+
+uint32_t equihash_verify_sol(struct work *work, sols_t *sols, int sol_i)
 {
   uint32_t thr_id = work->thr->id;
   uint32_t	*inputs = sols->values[sol_i];
@@ -355,30 +273,8 @@ uint32_t verify_sol(struct work *work, sols_t *sols, int sol_i)
   
   gen_hash(work->equihash_data, 1344 + 143, work->hash); 
   
-  if (work->getwork_mode == GETWORK_MODE_STRATUM) {
-    
-/*      char *eqdata = bin2hex(work->equihash_data, 1487);
-      applog(LOG_DEBUG, "[THR%d] %s: got solution... %s", thr_id, __func__, eqdata); 
-      free(eqdata);
-      char *whash = bin2hex(work->hash, 32);
-      applog(LOG_DEBUG, "[THR%d] %s: hash: %s", thr_id, __func__, whash); 
-      free(whash);
-      char *targ = bin2hex(work->target, 32);
-      applog(LOG_DEBUG, "[THR%d] %s: target: %s", thr_id, __func__, targ); 
-      free(targ);
-      applog(LOG_DEBUG, "[THR%d] %s: %08lx <= %08lx?", thr_id, __func__, ((uint32_t *)work->hash)[7], ((uint32_t *)work->target)[7]);*/
-      if (((uint32_t *)work->hash)[7] <= ((uint32_t *)work->target)[7]) {
-      //  applog(LOG_DEBUG, "[THR%d] %s: valid!", thr_id, __func__);
-        submit_nonce(work->thr, work, 0);
-      }
-      /*else {
-        applog(LOG_DEBUG, "[THR%d] %s: invalid...", thr_id, __func__);
-      }*/
-  }
-  else {
-    if (*(uint64_t*) (work->hash + 24) < *(uint64_t*) (work->target + 24)) {
-      submit_tested_work(work->thr, work);
-    }
+  if (*(uint64_t*) (work->hash + 24) < *(uint64_t*) (work->target + 24)) {
+    submit_tested_work(work->thr, work);
   }
   return 1;
 }

@@ -6507,29 +6507,23 @@ static void gen_stratum_work_eth(struct pool *pool, struct work *work)
 
 static void gen_stratum_work_equihash(struct pool *pool, struct work *work)
 {
-  unsigned char merkle_root[32], merkle_sha[64];
-  uint32_t *data32, *swap32;
-  uint64_t nonce2le;
-  int i, j;
-
   cg_wlock(&pool->data_lock);
+  work->nonce2 = pool->nonce2++;
+  work->nonce2_len = 2;
+
   /* Downgrade to a read lock to read off the pool variables */
   cg_dwlock(&pool->data_lock);
   
   /* equihash already has the merkle root in the header no need to change it */
-//  memset(work->data, 0, 168);
-//  memcpy(work->data, pool->header_bin, 128);
   memset(work->equihash_data, 0, 1487);
   memcpy(work->equihash_data, pool->header_bin, 128);
   
   //add pool extra nonce
-  hex2bin(work->equihash_data+108, pool->nonce1, (strlen(pool->nonce1) / 2));
-  *(uint64_t *)(work->equihash_data+108+(strlen(pool->nonce1) / 2)) = 1;
-  
+  hex2bin(work->equihash_data + 108, pool->nonce1, strlen(pool->nonce1) / 2);
+  memcpy(work->equihash_data + 108 + 20 - work->nonce2_len, &work->nonce2, work->nonce2_len);
+ 
   //add solutionsize
-  //uint32_t solution_size = 0x540fd; //compact size 1344 (0x540) - make/use a function to calculate the encoding in the future
-  //memcpy(work->data+140, &solution_size, 3);
-  add_var_int(work->equihash_data+140, 1344);
+  add_var_int(work->equihash_data + 140, 1344);
 
   /* Store the stratum work diff to check it still matches the pool's
   * stratum diff when submitting shares */
@@ -6545,10 +6539,8 @@ static void gen_stratum_work_equihash(struct pool *pool, struct work *work)
     char *header, *merkle_hash;
 
     header = bin2hex(work->equihash_data, 143);
-    merkle_hash = bin2hex((const unsigned char *)merkle_root, 32);
-    applog(LOG_DEBUG, "[THR%d] Generated stratum merkle %s", work->thr_id, merkle_hash);
     applog(LOG_DEBUG, "[THR%d] Generated stratum header %s", work->thr_id, header);
-    applog(LOG_DEBUG, "[THR%d] Work job_id %s nonce2 %"PRIu64" ntime %s", work->thr_id, work->job_id, work->nonce2, work->ntime);
+    applog(LOG_DEBUG, "[THR%d] job_id %s, nonce1 %s, nonce2 %"PRIu64", ntime %s", work->thr_id, work->job_id, work->nonce1, work->nonce2, work->ntime);
     free(header);
     free(merkle_hash);
   }
@@ -7678,8 +7670,9 @@ bool submit_tested_work(struct thr_info *thr, struct work *work)
   else if (work->pool->algorithm.type == ALGO_EQUIHASH) {
     applog(LOG_DEBUG, "equihash target: %.16llx", *(uint64_t*) (work->target + 24));
     if (*(uint64_t*) (work->hash + 24) > *(uint64_t*) (work->target + 24))
-      return false; 
-    applog(LOG_WARNING, "Found zcash block!");
+      return false;
+    if (work->getwork_mode == GETWORK_MODE_GBT)
+      applog(LOG_WARNING, "Found zcash block!");
   }
   else if (!fulltest(work->hash, work->target)) {
     applog(LOG_INFO, "%s %d: Share above target", thr->cgpu->drv->name,
@@ -8093,7 +8086,6 @@ retry_pool:
   }
 
   while (42) {
-    applog(LOG_WARNING, "longpoll...");
     json_t *val, *soval;
 
     wait_lpcurrent(cp);
@@ -9493,7 +9485,15 @@ int main(int argc, char *argv[])
       pool->rpc_userpass = (char *)malloc(siz);
       if (!pool->rpc_userpass)
         quit(1, "Failed to malloc userpass");
-      snprintf(pool->rpc_userpass, siz, "%s:%s", pool->rpc_user, pool->rpc_pass);
+
+      char *point_chr = strchr(pool->rpc_user, '.');
+      if (pool->algorithm.type == ALGO_EQUIHASH && point_chr != NULL) {
+        *point_chr = '\0';
+        snprintf(pool->rpc_userpass, siz, "%s:%s", pool->rpc_user, pool->rpc_pass);
+        *point_chr = '.';
+      }
+      else
+        snprintf(pool->rpc_userpass, siz, "%s:%s", pool->rpc_user, pool->rpc_pass);
     }
   }
   /* Set the currentpool to pool 0 */

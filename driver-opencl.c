@@ -36,7 +36,6 @@
 #include "util.h"
 
 #include "algorithm/equihash.h"
-#include "kernel/equihash-param.h"
 
 /* TODO: cleanup externals ********************/
 
@@ -1334,7 +1333,6 @@ static bool opencl_thread_init(struct thr_info *thr)
   cl_int status = 0;
   thrdata = (struct opencl_thread_data *)calloc(1, sizeof(*thrdata));
   thr->cgpu_data = thrdata;
-  int buffersize = (gpu->algorithm.type == ALGO_EQUIHASH) ? sizeof(sols_t) : BUFFERSIZE; //MAX(BUFFERSIZE, sizeof(sols_t));
 
   if (!thrdata) {
     applog(LOG_ERR, "Failed to calloc in opencl_thread_init");
@@ -1342,7 +1340,7 @@ static bool opencl_thread_init(struct thr_info *thr)
   }
 
   thrdata->queue_kernel_parameters = gpu->algorithm.queue_kernel;
-  thrdata->res = (uint32_t *)calloc(buffersize, 1);
+  thrdata->res = (uint32_t *)calloc(BUFFERSIZE, 1);
 
   if (!thrdata->res) {
     free(thrdata);
@@ -1351,7 +1349,7 @@ static bool opencl_thread_init(struct thr_info *thr)
   }
 
   status |= clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
-    buffersize, blank_res, 0, NULL, NULL);
+    BUFFERSIZE, blank_res, 0, NULL, NULL);
   if (unlikely(status != CL_SUCCESS)) {
     free(thrdata->res);
     free(thrdata);
@@ -1369,7 +1367,8 @@ static bool opencl_thread_init(struct thr_info *thr)
 static bool opencl_prepare_work(struct thr_info __maybe_unused *thr, struct work *work)
 {
   work->blk.work = work;
-  if (work->pool->algorithm.precalc_hash) work->pool->algorithm.precalc_hash(&work->blk, 0, (uint32_t *)(work->data));
+  if (work->pool->algorithm.precalc_hash)
+    work->pool->algorithm.precalc_hash(&work->blk, 0, (uint32_t *)(work->data));
   thr->pool_no = work->pool->pool_no;
 
   return true;
@@ -1377,7 +1376,6 @@ static bool opencl_prepare_work(struct thr_info __maybe_unused *thr, struct work
 
 
 extern int opt_dynamic_interval;
-uint32_t verify_sol(struct work *, sols_t *, int);
 
 static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
   int64_t __maybe_unused max_nonce)
@@ -1427,7 +1425,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
     uint64_t t0 = time(NULL);
     uint8_t prev_hash[32];
     size_t txns;
-    bool stale = false;
+    bool stale = true;
     
     if (work->getwork_mode != GETWORK_MODE_STRATUM) {
       cg_rlock(&work->pool->gbt_lock);
@@ -1448,22 +1446,25 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
           sols->nr = MAX_SOLS;
         }
         for (int sol_i = 0; sol_i < sols->nr; sol_i++)
-          ret += verify_sol(work, sols, sol_i);
+          ret += equihash_verify_sol(work, sols, sol_i);
       }
       else {
         applog(LOG_ERR, "Error %d: Reading result buffer for ALGO_EQUIHASH failed. (clEnqueueReadBuffer)", status);
         return -1;
       }
       
+      // increase nonce
       work->blk.nonce++;
-      if (work->getwork_mode != GETWORK_MODE_STRATUM) {
-        *(uint64_t*)(work->equihash_data + 108) += 1;  // increase nonce
+      if (work->getwork_mode == GETWORK_MODE_STRATUM)
+	*(uint16_t*)(work->equihash_data + 108 + strlen(work->nonce1) / 2) += 1;
+      else {
+        *(uint64_t*)(work->equihash_data + 108) += 1;
         
         cg_rlock(&work->pool->gbt_lock);
         stale = (work->pool->gbt_txns != txns) || (memcmp(prev_hash, work->pool->previousblockhash, 32) != 0);
         cg_runlock(&work->pool->gbt_lock);
       }
-    } while ((time(NULL) - t0) <= 3 && !stale); 
+    } while (!stale && (time(NULL) - t0) < 2); 
     return ret;
   }
   

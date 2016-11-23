@@ -38,7 +38,7 @@
 #include "algorithm/pluck.h"
 #include "algorithm/yescrypt.h"
 #include "algorithm/lyra2rev2.h"
-#include "kernel/equihash-param.h"
+#include "algorithm/equihash.h"
 
 /* FIXME: only here for global config vars, replace with configuration.h
  * or similar as soon as config is in a struct instead of littered all

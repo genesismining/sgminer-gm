@@ -41,7 +41,6 @@
 #include "algorithm/blakecoin.h"
 #include "algorithm/ethash.h"
 #include "algorithm/equihash.h"
-#include "kernel/equihash-param.h"
 
 #include "compat.h"
 
@@ -1084,21 +1083,6 @@ static cl_int queue_equihash_kernel(_clState *clState, dev_blk_ctx *blk, __maybe
   cl_int status = 0;
   size_t work_items = threads;
   size_t worksize = clState->wsize;
-  struct pool *pool = blk->work->pool;
-
-  //do this for stratum only, don't want to mess with GBT implementation...
-  if (blk->work->getwork_mode == GETWORK_MODE_STRATUM) {
-    //get next nonce to check
-    cg_wlock(&pool->data_lock);
-    blk->work->nonce2 = pool->nonce2++;
-    cg_wunlock(&pool->data_lock);
-
-    //set new nonce in equihash_data
-    *(uint64_t*)(blk->work->equihash_data+108+(strlen(blk->work->nonce1) / 2)) = blk->work->nonce2;
-/*    char *n = bin2hex(blk->work->equihash_data+108, 32);
-    applog(LOG_DEBUG, "[THR%d] nonce: %s", blk->work->thr->id, n);
-    free(n);*/
-  }
 
   uint64_t mid_hash[8];
   equihash_calc_mid_hash(mid_hash, blk->work->equihash_data);
