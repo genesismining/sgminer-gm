@@ -1,6 +1,10 @@
 #define MAX_OUTPUTS 0xFFu
 #define barrier(x) mem_fence(x)
 
+#define OPENCL_PLATFORM_UNKNOWN 0
+#define OPENCL_PLATFORM_NVIDIA  1
+#define OPENCL_PLATFORM_AMD		2
+
 #define ETHASH_DATASET_PARENTS 256
 #define NODE_WORDS (64/4)
 #define ACCESSES	64
@@ -248,6 +252,7 @@ __kernel void search(
 			((ulong4 *)state)[2] = share->ulong4s[0];
 	}
 	
+	#pragma unroll
 	for (uint i = 13; i < 25; ++i)
 		state[i] = (uint2)(0U, 0U);
 	state[12] = as_uint2(0x0000000000000001UL);

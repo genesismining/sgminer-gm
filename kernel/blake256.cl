@@ -77,17 +77,17 @@ __constant static const sph_u32  c_u256[16] = {
 	const sph_u32 idx2 = sigma[r][x+1]; \
 	v[a] += (m[idx1] ^ c_u256[idx2]) + v[b]; \
 	v[d] ^= v[a]; \
-    v[d] = rotate(v[d], 16U); \
+    v[d] = SPH_ROTR32(v[d], 16); \
 	v[c] += v[d]; \
     v[b] ^= v[c]; \
-	v[b] = rotate(v[b], 20U); \
+	v[b] = SPH_ROTR32(v[b], 12); \
 \
 	v[a] += (m[idx2] ^ c_u256[idx1]) + v[b]; \
     v[d] ^= v[a]; \
-	v[d] = rotate(v[d], 24U); \
+	v[d] = SPH_ROTR32(v[d], 8); \
 	v[c] += v[d]; \
     v[b] ^= v[c]; \
-	v[b] = rotate(v[b], 25U); \
+	v[b] = SPH_ROTR32(v[b], 7); \
 }
 
 

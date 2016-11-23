@@ -235,8 +235,6 @@ char *set_default_thread_concurrency(const char *arg)
   return NULL;
 }
 
-#ifdef HAVE_ADL
-
   char *set_default_gpu_engine(const char *arg)
   {
     default_profile.gpu_engine = arg;
@@ -272,8 +270,6 @@ char *set_default_thread_concurrency(const char *arg)
     default_profile.gpu_vddc = arg;
     return NULL;
   }
-
-#endif
 
 char *set_default_profile(char *arg)
 {
@@ -366,51 +362,47 @@ char *set_profile_thread_concurrency(const char *arg)
   return NULL;
 }
 
-#ifdef HAVE_ADL
+char *set_profile_gpu_engine(const char *arg)
+{
+struct profile *profile = get_current_profile();
+profile->gpu_engine = arg;
+return NULL;
+}
 
-  char *set_profile_gpu_engine(const char *arg)
-  {
-    struct profile *profile = get_current_profile();
-    profile->gpu_engine = arg;
-    return NULL;
-  }
+char *set_profile_gpu_memclock(const char *arg)
+{
+struct profile *profile = get_current_profile();
+profile->gpu_memclock = arg;
+return NULL;
+}
 
-  char *set_profile_gpu_memclock(const char *arg)
-  {
-    struct profile *profile = get_current_profile();
-    profile->gpu_memclock = arg;
-    return NULL;
-  }
+char *set_profile_gpu_threads(const char *arg)
+{
+struct profile *profile = get_current_profile();
+profile->gpu_threads = arg;
+return NULL;
+}
 
-  char *set_profile_gpu_threads(const char *arg)
-  {
-    struct profile *profile = get_current_profile();
-    profile->gpu_threads = arg;
-    return NULL;
-  }
+char *set_profile_gpu_fan(const char *arg)
+{
+struct profile *profile = get_current_profile();
+profile->gpu_fan = arg;
+return NULL;
+}
 
-  char *set_profile_gpu_fan(const char *arg)
-  {
-    struct profile *profile = get_current_profile();
-    profile->gpu_fan = arg;
-    return NULL;
-  }
+char *set_profile_gpu_powertune(const char *arg)
+{
+struct profile *profile = get_current_profile();
+profile->gpu_powertune = arg;
+return NULL;
+}
 
-  char *set_profile_gpu_powertune(const char *arg)
-  {
-    struct profile *profile = get_current_profile();
-    profile->gpu_powertune = arg;
-    return NULL;
-  }
-
-  char *set_profile_gpu_vddc(const char *arg)
-  {
-    struct profile *profile = get_current_profile();
-    profile->gpu_vddc = arg;
-    return NULL;
-  }
-
-#endif
+char *set_profile_gpu_vddc(const char *arg)
+{
+struct profile *profile = get_current_profile();
+profile->gpu_vddc = arg;
+return NULL;
+}
 
 char *set_profile_nfactor(const char *arg)
 {
@@ -911,7 +903,6 @@ void load_default_profile()
   if(!empty_string(profile->thread_concurrency))
     default_profile.thread_concurrency = profile->thread_concurrency;
 
-#ifdef HAVE_ADL
   if(!empty_string(profile->gpu_engine))
     default_profile.gpu_engine = profile->gpu_engine;
 
@@ -929,7 +920,7 @@ void load_default_profile()
 
   if(!empty_string(profile->gpu_vddc))
     default_profile.gpu_vddc = profile->gpu_vddc;
-#endif
+
   if(!empty_string(profile->shaders))
     default_profile.shaders = profile->shaders;
 
@@ -967,7 +958,6 @@ void apply_defaults()
   if (!empty_string(default_profile.thread_concurrency))
     set_thread_concurrency(default_profile.thread_concurrency);
 
-#ifdef HAVE_ADL
   if (!empty_string(default_profile.gpu_engine))
     set_gpu_engine(default_profile.gpu_engine);
 
@@ -985,8 +975,7 @@ void apply_defaults()
 
   if (!empty_string(default_profile.gpu_vddc))
     set_gpu_vddc((char *)default_profile.gpu_vddc);
-#endif
-
+    
   if (!empty_string(default_profile.shaders))
     set_shaders((char *)default_profile.shaders);
 
@@ -1145,7 +1134,6 @@ void apply_pool_profile(struct pool *pool)
   }
   applog(LOG_DEBUG, "Pool %i Thread Concurrency set to \"%s\"", pool->pool_no, pool->thread_concurrency);
 
-  #ifdef HAVE_ADL
     if(pool_cmp(pool->gpu_engine, default_profile.gpu_engine))
     {
       if(!empty_string(profile->gpu_engine))
@@ -1199,7 +1187,6 @@ void apply_pool_profile(struct pool *pool)
           pool->gpu_vddc = default_profile.gpu_vddc;
     }
     applog(LOG_DEBUG, "Pool %i GPU Vddc set to \"%s\"", pool->pool_no, pool->gpu_vddc);
-  #endif
 
   if(pool_cmp(pool->shaders, default_profile.shaders))
   {
@@ -1418,7 +1405,6 @@ static json_t *build_pool_json()
     if (!build_pool_json_add(obj, "worksize", pool->worksize, profile->worksize, default_profile.worksize, pool->pool_no))
       return NULL;
 
-#ifdef HAVE_ADL
     // gpu_engine
     if (!build_pool_json_add(obj, "gpu-engine", pool->gpu_engine, profile->gpu_engine, default_profile.gpu_engine, pool->pool_no))
       return NULL;
@@ -1442,7 +1428,6 @@ static json_t *build_pool_json()
     // gpu-vddc
     if (!build_pool_json_add(obj, "gpu-vddc", pool->gpu_vddc, profile->gpu_vddc, default_profile.gpu_vddc, pool->pool_no))
       return NULL;
-#endif
 
     // all done, add pool to array...
     if (json_array_append_new(pool_array, obj) == -1)
@@ -1728,7 +1713,6 @@ void write_config(const char *filename)
   //write gpu settings that aren't part of profiles -- only write if gpus are available
   if(nDevs)
   {
-    #ifdef HAVE_ADL
       //temp-cutoff
       for(i = 0;i < nDevs; i++)
         obj = json_sprintf("%s%s%d", ((i > 0)?json_string_value(obj):""), ((i > 0)?",":""), gpus[i].cutofftemp);
@@ -1756,7 +1740,6 @@ void write_config(const char *filename)
         obj = json_sprintf("%s%s%d", ((i > 0)?json_string_value(obj):""), ((i > 0)?",":""), (int)gpus[i].gpu_memdiff);
 
       json_add(config, "gpu-memdiff", obj);
-    #endif
   }
 
   //add other misc options

@@ -40,7 +40,8 @@
 #include "algorithm/blake256.h"
 #include "algorithm/blakecoin.h"
 #include "algorithm/ethash.h"
-#include "algorithm/cryptonight.h"
+#include "algorithm/equihash.h"
+#include "kernel/equihash-param.h"
 
 #include "compat.h"
 
@@ -74,7 +75,7 @@ const char *algorithm_type_str[] = {
   "Blake",
   "Vanilla",
   "Ethash",
-  "cryptonight"
+  "Equihash"
 };
 
 void sha256(const unsigned char *message, unsigned int len, unsigned char *digest)
@@ -119,6 +120,13 @@ static void append_scrypt_compiler_options(struct _build_kernel_data *data, stru
 }
 
 extern uint32_t EthereumEpochNumber;
+
+static void append_ethash_compiler_options(struct _build_kernel_data *data, struct cgpu_info *cgpu, struct _algorithm_t *algorithm)
+{
+  //char buf[255];
+  //sprintf(buf, " -D DAG_SIZE=%lluUL ", EthGetDAGSize(EthereumEpochNumber) / 128);
+  //strcat(data->compiler_options, buf);
+}
 
 static void append_neoscrypt_compiler_options(struct _build_kernel_data *data, struct cgpu_info *cgpu, struct _algorithm_t *algorithm)
 {
@@ -967,9 +975,9 @@ static cl_int queue_ethash_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_u
 	cl_uint HighNonce, Isolate = 0xFFFFFFFFUL;
 	cl_ulong DAGSize = EthGetDAGSize(blk->work->EpochNumber);
 	size_t DAGItems = (size_t) (DAGSize / 64);
-	
+
 	le_target = *(cl_ulong *)(blk->work->device_target + 24);
-	
+
 	// DO NOT flip80.
 	status = clEnqueueWriteBuffer(clState->commandQueue, clState->CLbuffer0, true, 0, 32, blk->work->data, 0, NULL, NULL);
 	if (clState->EpochNumber != blk->work->EpochNumber)
@@ -977,28 +985,28 @@ static cl_int queue_ethash_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_u
 		clState->EpochNumber = blk->work->EpochNumber;
 		cl_ulong CacheSize = EthGetCacheSize(blk->work->EpochNumber);
 		cl_event DAGGenEvent;
-		
+
 		applog(LOG_DEBUG, "DAG being regenerated.");
 		if (clState->EthCache)
 			clReleaseMemObject(clState->EthCache);
 		if (clState->DAG)
 			clReleaseMemObject(clState->DAG);
 
-		clState->DAG = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, DAGSize, NULL, &status);	
+		clState->DAG = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, DAGSize, NULL, &status);
 		if (status != CL_SUCCESS)
 		{
 			applog(LOG_ERR, "Error %d: Creating the DAG buffer.", status);
 			return(status);
 		}
-	
+
 		clState->EthCache = clCreateBuffer(clState->context, CL_MEM_READ_ONLY, CacheSize, NULL, &status);
-	
+
 		int idx = blk->work->EpochNumber % 2;
 		cg_ilock(&EthCacheLock[idx]);
 		bool update = (EthCache[idx] == NULL || *(uint32_t*) EthCache[idx] != blk->work->EpochNumber);
 		if (update)
 		{
-			cg_ulock(&EthCacheLock[idx]);	
+			cg_ulock(&EthCacheLock[idx]);
 			EthCache[idx] = realloc(EthCache[idx], sizeof(uint8_t) * CacheSize + 64);
 			*(uint32_t*) EthCache[idx] = blk->work->EpochNumber;
 			EthGenerateCache(EthCache[idx] + 64, blk->work->seedhash, CacheSize);
@@ -1013,47 +1021,47 @@ static cl_int queue_ethash_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_u
 			cg_wunlock(&EthCacheLock[idx]);
 		else
 			cg_runlock(&EthCacheLock[idx]);
-		
+
 		if (status != CL_SUCCESS)
 		{
 			applog(LOG_ERR, "Error %d: Creating the cache buffer and/or writing to it.", status);
 			return(status);
 		}
-		
+
 		// enqueue DAG gen kernel
 		kernel = &clState->GenerateDAG;
-		
+
 		cl_uint zero = 0;
 		cl_uint CacheSize64 = CacheSize / 64;
-		
+
 		CL_SET_ARG(zero);
 		CL_SET_ARG(clState->EthCache);
 		CL_SET_ARG(clState->DAG);
 		CL_SET_ARG(CacheSize64);
 		CL_SET_ARG(Isolate);
-		
+
 		status |= clEnqueueNDRangeKernel(clState->commandQueue, clState->GenerateDAG, 1, NULL, &DAGItems, NULL, 0, NULL, &DAGGenEvent);
 		status |= clWaitForEvents(1, &DAGGenEvent);
 		clReleaseEvent(DAGGenEvent);
-		
+
 		if(status != CL_SUCCESS)
 		{
 			applog(LOG_ERR, "Error %d: Setting args for the DAG kernel and/or executing it.", status);
 			return(status);
 		}
 	}
-	
+
 	mutex_lock(&eth_nonce_lock);
 	HighNonce = eth_nonce++;
 	blk->work->Nonce = (cl_ulong) HighNonce << 32;
 	mutex_unlock(&eth_nonce_lock);
-		
+
 	num = 0;
 	kernel = &clState->kernel;
-	
+
 	// Not nodes now (64 bytes), but DAG entries (128 bytes)
 	cl_uint ItemsArg = DAGItems >> 1;
-	
+
 	CL_SET_ARG(clState->outputBuffer);
 	CL_SET_ARG(clState->CLbuffer0);
 	CL_SET_ARG(clState->DAG);
@@ -1061,70 +1069,80 @@ static cl_int queue_ethash_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_u
 	CL_SET_ARG(blk->work->Nonce);
 	CL_SET_ARG(le_target);
 	CL_SET_ARG(Isolate);
-	
+
 	return(status);
 }
 
-static cl_int queue_cryptonight_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_unused cl_uint threads)
+static void append_equihash_compiler_options(struct _build_kernel_data *data, struct cgpu_info *cgpu, struct _algorithm_t *algorithm)
+{  
+  strcat(data->compiler_options, "");
+}
+
+
+static cl_int queue_equihash_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_unused cl_uint threads)
 {
-	cl_kernel *kernel = &clState->kernel;
-	unsigned int num = 0;
-	cl_int status = 0, tgt32 = (blk->work->XMRTarget);
-	cl_ulong le_target = ((cl_ulong)(blk->work->XMRTarget));
+  cl_int status = 0;
+  size_t work_items = threads;
+  size_t worksize = clState->wsize;
+  struct pool *pool = blk->work->pool;
 
-	//le_target = *(cl_ulong *)(blk->work->device_target + 24);
-	memcpy(clState->cldata, blk->work->data, 76);
-		
-	status = clEnqueueWriteBuffer(clState->commandQueue, clState->CLbuffer0, true, 0, 76, clState->cldata , 0, NULL, NULL);
-	
-	CL_SET_ARG(clState->CLbuffer0);
-	CL_SET_ARG(clState->Scratchpads);
-	CL_SET_ARG(clState->States);
-	
-	num = 0;
-	kernel = clState->extra_kernels;
-	CL_SET_ARG(clState->Scratchpads);
-	CL_SET_ARG(clState->States);
-	
-	num = 0;
-	CL_NEXTKERNEL_SET_ARG(clState->Scratchpads);
-	CL_SET_ARG(clState->States);
-	CL_SET_ARG(clState->BranchBuffer[0]);
-	CL_SET_ARG(clState->BranchBuffer[1]);
-	CL_SET_ARG(clState->BranchBuffer[2]);
-	CL_SET_ARG(clState->BranchBuffer[3]);
-	
-	num = 0;
-	CL_NEXTKERNEL_SET_ARG(clState->States);
-	CL_SET_ARG(clState->BranchBuffer[0]);
-	CL_SET_ARG(clState->outputBuffer);
-	CL_SET_ARG(tgt32);
-	
-	// last to be set in driver-opencl.c
-	
-	num = 0;
-	CL_NEXTKERNEL_SET_ARG(clState->States);
-	CL_SET_ARG(clState->BranchBuffer[1]);
-	CL_SET_ARG(clState->outputBuffer);
-	CL_SET_ARG(tgt32);
-	
-	
-	num = 0;
-	CL_NEXTKERNEL_SET_ARG(clState->States);
-	CL_SET_ARG(clState->BranchBuffer[2]);
-	CL_SET_ARG(clState->outputBuffer);
-	CL_SET_ARG(tgt32);
-	
-	
-	num = 0;
-	CL_NEXTKERNEL_SET_ARG(clState->States);
-	CL_SET_ARG(clState->BranchBuffer[3]);
-	CL_SET_ARG(clState->outputBuffer);
-	CL_SET_ARG(tgt32);
-	
-	return(status);
+  //do this for stratum only, don't want to mess with GBT implementation...
+  if (blk->work->getwork_mode == GETWORK_MODE_STRATUM) {
+    //get next nonce to check
+    cg_wlock(&pool->data_lock);
+    blk->work->nonce2 = pool->nonce2++;
+    cg_wunlock(&pool->data_lock);
+
+    //set new nonce in equihash_data
+    *(uint64_t*)(blk->work->equihash_data+108+(strlen(blk->work->nonce1) / 2)) = blk->work->nonce2;
+/*    char *n = bin2hex(blk->work->equihash_data+108, 32);
+    applog(LOG_DEBUG, "[THR%d] nonce: %s", blk->work->thr->id, n);
+    free(n);*/
+  }
+
+  uint64_t mid_hash[8];
+  equihash_calc_mid_hash(mid_hash, blk->work->equihash_data);
+  status = clEnqueueWriteBuffer(clState->commandQueue, clState->MidstateBuf, CL_TRUE, 0, sizeof(mid_hash), mid_hash, 0, NULL, NULL);
+  uint32_t dbg[2] = {0};
+  status |= clEnqueueWriteBuffer(clState->commandQueue, clState->padbuffer8, CL_TRUE, 0, sizeof(dbg), &dbg, 0, NULL, NULL);
+  
+  cl_mem buf_ht[2] = {clState->CLbuffer0, clState->buffer1};
+  cl_mem rowCounters[2] = {clState->buffer2, clState->buffer3};
+  for (int round = 0; round < PARAM_K; round++) {
+    size_t global_ws = NR_ROWS / ROWS_PER_UINT;
+    size_t local_ws = 256;
+    unsigned int num = 0;
+    cl_kernel *kernel = &clState->extra_kernels[0];
+    // Now on every round!!!!
+    CL_SET_ARG(buf_ht[round % 2]);
+    CL_SET_ARG(rowCounters[round % 2]);
+    status |= clEnqueueNDRangeKernel(clState->commandQueue, *kernel, 1, NULL, &global_ws, &local_ws, 0, NULL, NULL);
+    
+    num = 0;
+    kernel = &clState->extra_kernels[1 + round];
+    if (!round) {
+      CL_SET_ARG(clState->MidstateBuf);
+      CL_SET_ARG(buf_ht[round % 2]);
+      CL_SET_ARG(rowCounters[round % 2]);
+      work_items = threads;
+    }
+    else {
+      CL_SET_ARG(buf_ht[(round - 1) % 2]);
+      CL_SET_ARG(buf_ht[round % 2]);
+      CL_SET_ARG(rowCounters[(round - 1) % 2]);
+      CL_SET_ARG(rowCounters[round % 2]);
+      work_items = NR_ROWS;
+    }
+    CL_SET_ARG(clState->padbuffer8);
+    if (round == PARAM_K - 1)
+      CL_SET_ARG(clState->outputBuffer);
+    status |= clEnqueueNDRangeKernel(clState->commandQueue, *kernel, 1, NULL, &work_items, &worksize, 0, NULL, NULL);
+  }
+  work_items = NR_ROWS;
+  status |= clEnqueueNDRangeKernel(clState->commandQueue, clState->kernel, 1, NULL, &work_items, &worksize, 0, NULL, NULL);
+ 
+  return status;
 }
-
 
 static algorithm_settings_t algos[] = {
   // kernels starting from this will have difficulty calculated by using litecoin algorithm
@@ -1218,11 +1236,11 @@ static algorithm_settings_t algos[] = {
   { "blake256r14", ALGO_BLAKE,     "", 1, 1, 1, 0, 0, 0xFF, 0xFFFFULL, 0x00000000UL, 0, 128, 0, blake256_regenhash, precalc_hash_blake256, queue_blake_kernel, gen_hash, NULL },
   { "vanilla",     ALGO_VANILLA,   "", 1, 1, 1, 0, 0, 0xFF, 0xFFFFULL, 0x000000ffUL, 0, 128, 0, blakecoin_regenhash, precalc_hash_blakecoin, queue_blake_kernel, gen_hash, NULL },
 
-  { "ethash",        ALGO_ETHASH,   "", (1ULL << 32), (1ULL << 32), 1, 0, 0, 0xFF, 0xFFFF000000000000ULL, 0, 0, 128, CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, ethash_regenhash, NULL, queue_ethash_kernel, gen_hash, NULL },
-  { "ethash-genoil", ALGO_ETHASH,   "", (1ULL << 32), (1ULL << 32), 1, 0, 0, 0xFF, 0xFFFF000000000000ULL, 0, 0, 128, CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, ethash_regenhash, NULL, queue_ethash_kernel, gen_hash, NULL },
-  
-  { "cryptonight", ALGO_CRYPTONIGHT, "", (1ULL << 32), (1ULL << 32), (1ULL << 32), 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 6, 0, 0, cryptonight_regenhash, NULL, queue_cryptonight_kernel, gen_hash, NULL },
-// Terminator (do not remove)
+  { "ethash",     ALGO_ETHASH,   "", (1ULL << 32), (1ULL << 32), 1, 0, 0, 0xFF, 0xFFFF000000000000ULL, 0x00000000UL, 0, 128, 0, ethash_regenhash, NULL, queue_ethash_kernel, gen_hash, append_ethash_compiler_options },
+
+  { "equihash",     ALGO_EQUIHASH,   "", 1, (1ULL << 28), (1ULL << 28), 0, 0, 0x20000, 0xFFFF000000000000ULL, 0x00000000UL, 0, 128, 0, equihash_regenhash, NULL, queue_equihash_kernel, gen_hash, append_equihash_compiler_options },
+
+  // Terminator (do not remove)
   { NULL, ALGO_UNK, "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL }
 };
 
@@ -1267,10 +1285,12 @@ void copy_algorithm_settings(algorithm_t* dest, const char* algo)
   }
 }
 
-static const char *lookup_algorithm_alias(const char *lookup_alias, uint8_t *nfactor)
+static const char *lookup_algorithm_alias(const char *lookup_alias, uint8_t *nfactor, uint8_t *kfactor)
 {
 #define ALGO_ALIAS_NF(alias, name, nf) \
   if (strcasecmp(alias, lookup_alias) == 0) { *nfactor = nf; return name; }
+#define ALGO_ALIAS_NFK(alias, name, nf, kf) \
+  if (strcasecmp(alias, lookup_alias) == 0) { *kfactor = kf, *nfactor = nf; return name; }
 #define ALGO_ALIAS(alias, name) \
   if (strcasecmp(alias, lookup_alias) == 0) return name;
 
@@ -1298,9 +1318,11 @@ static const char *lookup_algorithm_alias(const char *lookup_alias, uint8_t *nfa
   ALGO_ALIAS("lyra2v2", "lyra2rev2");
   ALGO_ALIAS("blakecoin", "blake256r8");
   ALGO_ALIAS("blake", "blake256r14");
+  ALGO_ALIAS_NFK("zcash", "equihash", 200, 9);
 
 #undef ALGO_ALIAS
 #undef ALGO_ALIAS_NF
+#undef ALGO_ALIAS_NFK
 
   return NULL;
 }
@@ -1311,20 +1333,34 @@ void set_algorithm(algorithm_t* algo, const char* newname_alias)
 
   //load previous algorithm nfactor in case nfactor was applied before algorithm... or default to 10
   uint8_t old_nfactor = ((algo->nfactor) ? algo->nfactor : 0);
+
+  //load previous algorithm kfactor in case kfactor was applied before algorithm... or default to 9
+  uint8_t old_kfactor = ((algo->kfactor) ? algo->kfactor : 0);
+
   //load previous kernel file name if was applied before algorithm...
   const char *kernelfile = algo->kernelfile;
   uint8_t nfactor = 10;
+  uint8_t kfactor = 9;
 
-  if (!(newname = lookup_algorithm_alias(newname_alias, &nfactor)))
+  if (!(newname = lookup_algorithm_alias(newname_alias, &nfactor, &kfactor))) {
     newname = newname_alias;
+  }
 
   copy_algorithm_settings(algo, newname);
 
   // use old nfactor if it was previously set and is different than the one set by alias
-  if ((old_nfactor > 0) && (old_nfactor != nfactor))
+  if ((old_nfactor > 0) && (old_nfactor != nfactor)) {
     nfactor = old_nfactor;
+  }
 
   set_algorithm_nfactor(algo, nfactor);
+
+  // use old kfactor if it was previously set and is different than the one set by alias
+  if ((old_kfactor > 0) && (old_kfactor != kfactor)) {
+    kfactor = old_kfactor;
+  }
+
+  set_algorithm_kfactor(algo, kfactor);
 
   //reapply kernelfile if was set
   if (!empty_string(kernelfile)) {
@@ -1357,7 +1393,12 @@ void set_algorithm_nfactor(algorithm_t* algo, const uint8_t nfactor)
   }
 }
 
+void set_algorithm_kfactor(algorithm_t* algo, const uint8_t kfactor)
+{
+  algo->kfactor = kfactor;
+}
+
 bool cmp_algorithm(const algorithm_t* algo1, const algorithm_t* algo2)
 {
-  return (!safe_cmp(algo1->name, algo2->name) && !safe_cmp(algo1->kernelfile, algo2->kernelfile) && (algo1->nfactor == algo2->nfactor));
+  return (!safe_cmp(algo1->name, algo2->name) && !safe_cmp(algo1->kernelfile, algo2->kernelfile) && (algo1->nfactor == algo2->nfactor) && (algo1->kfactor == algo2->kfactor));
 }

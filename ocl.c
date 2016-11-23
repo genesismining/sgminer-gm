@@ -38,12 +38,18 @@
 #include "algorithm/pluck.h"
 #include "algorithm/yescrypt.h"
 #include "algorithm/lyra2rev2.h"
+#include "kernel/equihash-param.h"
 
 /* FIXME: only here for global config vars, replace with configuration.h
  * or similar as soon as config is in a struct instead of littered all
  * over the global namespace.
  */
 #include "miner.h"
+
+
+#define CL_SET_ARG_N(n, var) do { status |= clSetKernelArg(*kernel, n, sizeof(var), (void *)&var); } while (0)
+#define CL_SET_ARG(var) CL_SET_ARG_N(num++, var)
+
 
 int opt_platform_id = -1;
 
@@ -180,37 +186,6 @@ static cl_int create_opencl_command_queue(cl_command_queue *command_queue, cl_co
   return status;
 }
 
-// Borrowed from driver-opencl.c
-static void set_threads_hashes(unsigned int vectors, unsigned int compute_shaders, size_t *globalThreads,
-  unsigned int minthreads, __maybe_unused int *intensity, __maybe_unused int *xintensity,
-  __maybe_unused int *rawintensity, algorithm_t *algorithm)
-{
-  unsigned int threads = 0;
-  while (threads < minthreads) {
-
-    if (*rawintensity > 0) {
-      threads = *rawintensity;
-    }
-    else if (*xintensity > 0) {
-      threads = compute_shaders * ((algorithm->xintensity_shift) ? (1 << (algorithm->xintensity_shift + *xintensity)) : *xintensity);
-    }
-    else {
-      threads = 1 << (algorithm->intensity_shift + *intensity);
-    }
-
-    if (threads < minthreads) {
-      if (likely(*intensity < MAX_INTENSITY)) {
-        (*intensity)++;
-      }
-      else {
-        threads = minthreads;
-      }
-    }
-  }
-
-  *globalThreads = threads;
-}
-
 _clState *initCl(unsigned int gpu, char *name, size_t nameSize, algorithm_t *algorithm)
 {
   cl_int status = 0;
@@ -264,19 +239,16 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize, algorithm_t *alg
 
     applog(LOG_INFO, "\t%i\t%s", i, pbuff[i]);
 	}
-	
+
 	applog(LOG_INFO, "Selected %d: %s", gpu, pbuff[gpu]);
-	
   strncpy(name, pbuff[gpu], nameSize);
-  
+
   status = create_opencl_context(&clState->context, &platform);
   if (status != CL_SUCCESS) {
     applog(LOG_ERR, "Error %d: Creating Context. (clCreateContextFromType)", status);
     return NULL;
   }
 
-  applog(LOG_DEBUG, "Inside initCl.");
-  
   status = create_opencl_command_queue(&clState->commandQueue, &clState->context, &devices[gpu], cgpu->algorithm.cq_properties);
   if (status != CL_SUCCESS) {
     applog(LOG_ERR, "Error %d: Creating Command Queue. (clCreateCommandQueue)", status);
@@ -756,7 +728,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize, algorithm_t *alg
       return NULL;
     }
 
-	// If it doesn't work, oh well, build it again next run
+    // If it doesn't work, oh well, build it again next run
     save_opencl_kernel(build_data, clState->program);
   }
 
@@ -765,38 +737,114 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize, algorithm_t *alg
     filename, algorithm->nfactor, algorithm->n);
 
   /* get a kernel object handle for a kernel with the given name */
-  clState->kernel = clCreateKernel(clState->program, "search", &status);
-  if (status != CL_SUCCESS) {
-    applog(LOG_ERR, "Error %d: Creating Kernel from program. (clCreateKernel)", status);
+  if (algorithm->type == ALGO_EQUIHASH) {
+    clState->kernel = clCreateKernel(clState->program, "kernel_sols", &status);
+    if (status != CL_SUCCESS) {
+      applog(LOG_ERR, "Error %d: Creating Kernel \"kernel_sols\" from program. (clCreateKernel)", status);
+      return NULL;
+    }
+    char *kernel_names[] = {"kernel_init_ht",
+                            "kernel_round0", "kernel_round1", "kernel_round2",
+                            "kernel_round3", "kernel_round4", "kernel_round5",
+                            "kernel_round6", "kernel_round7", "kernel_round8"};
+    clState->n_extra_kernels = 1 + 9;
+    clState->extra_kernels = (cl_kernel *)malloc(sizeof(cl_kernel) * clState->n_extra_kernels);
+    for (int i = 0; i < clState->n_extra_kernels; i++) {
+      clState->extra_kernels[i] = clCreateKernel(clState->program, kernel_names[i], &status);
+      if (status != CL_SUCCESS) {
+	applog(LOG_ERR, "Error %d: Creating Kernel \"%s\" from program. (clCreateKernel)", status, kernel_names[i]);
+        return NULL;
+      }
+    }
+
+    char buffer[32];
+    clState->CLbuffer0 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, HT_SIZE, NULL, &status);
+    snprintf(buffer, sizeof(buffer), "CLbuffer0");
+    if (status != CL_SUCCESS)
+      goto out;
+    clState->buffer1 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, HT_SIZE, NULL, &status);
+    snprintf(buffer, sizeof(buffer), "buffer1");
+    if (status != CL_SUCCESS)
+      goto out;
+    clState->buffer2 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, NR_ROWS, NULL, &status);
+    snprintf(buffer, sizeof(buffer), "buffer2");
+    if (status != CL_SUCCESS)
+      goto out;
+    clState->buffer3 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, NR_ROWS, NULL, &status); 
+    snprintf(buffer, sizeof(buffer), "buffer3");
+    if (status != CL_SUCCESS)
+      goto out;
+    clState->padbuffer8 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, 2 * sizeof(uint32_t), NULL, &status);
+    snprintf(buffer, sizeof(buffer), "padbuffer8");
+    if (status != CL_SUCCESS)
+      goto out;
+    clState->MidstateBuf = clCreateBuffer(clState->context, CL_MEM_READ_ONLY, 140, NULL, &status);  // TODO: decrease buffer size to 64 bytes
+    snprintf(buffer, sizeof(buffer), "MidstateBuf");
+    if (status != CL_SUCCESS)
+      goto out;
+    clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, MAX(sizeof(sols_t), BUFFERSIZE), NULL, &status);
+    snprintf(buffer, sizeof(buffer), "outputBuffer");
+    if (status != CL_SUCCESS)
+      goto out;
+
+    unsigned int num = 0;
+    cl_kernel *kernel = &clState->kernel;
+    CL_SET_ARG(clState->CLbuffer0);
+    CL_SET_ARG(clState->buffer1);
+    CL_SET_ARG(clState->outputBuffer);
+    CL_SET_ARG(clState->buffer2);
+    CL_SET_ARG(clState->buffer3);
+
+    if (status != CL_SUCCESS) {
+      applog(LOG_ERR, "Error %d: Setting Kernel arguments for ALGO_EQUIHASH failed. (clSetKernelArg)", status);
+      return NULL;
+    }
+
+    clState->devid = cgpu->device_id;
+    return clState;
+out:
+    applog(LOG_ERR, "Error %d: Creating Buffer \"%s\" failed. (clCreateBuffer)", status, buffer);
     return NULL;
   }
+  else {
+    clState->kernel = clCreateKernel(clState->program, "search", &status);
+    if (status != CL_SUCCESS) {
+      applog(LOG_ERR, "Error %d: Creating Kernel from program. (clCreateKernel)", status);
+      return NULL;
+    }
   
+    // Load kernels
+    applog(LOG_NOTICE, "Initialising kernel %s with params N=%d, K=%d",
+      filename, algorithm->nfactor, algorithm->kfactor);
+    
+    clState->n_extra_kernels = algorithm->n_extra_kernels;
+    if (clState->n_extra_kernels > 0) {
+      unsigned int i;
+      char kernel_name[9]; // max: search99 + 0x0
+
+      clState->extra_kernels = (cl_kernel *)malloc(sizeof(cl_kernel)* clState->n_extra_kernels);
+
+      for (i = 0; i < clState->n_extra_kernels; i++) {
+        snprintf(kernel_name, 9, "%s%d", "search", i + 1);
+        clState->extra_kernels[i] = clCreateKernel(clState->program, kernel_name, &status);
+        if (status != CL_SUCCESS) {
+          applog(LOG_ERR, "Error %d: Creating ExtraKernel #%d from program. (clCreateKernel)", status, i);
+          return NULL;
+        }
+      }
+    }
+  }
+    
+
   if(algorithm->type == ALGO_ETHASH)
   {
 	  clState->GenerateDAG = clCreateKernel(clState->program, "GenerateDAG", &status);
-	  
+
 	  if(status != CL_SUCCESS)
 	  {
 		  applog(LOG_ERR, "Error %d while creating DAG generation kernel.", status);
 		  return(NULL);
 	  }
-  }
-  
-  clState->n_extra_kernels = algorithm->n_extra_kernels;
-  if (clState->n_extra_kernels > 0) {
-    unsigned int i;
-    char kernel_name[9]; // max: search99 + 0x0
-
-    clState->extra_kernels = (cl_kernel *)malloc(sizeof(cl_kernel)* clState->n_extra_kernels);
-
-    for (i = 0; i < clState->n_extra_kernels; i++) {
-      snprintf(kernel_name, 9, "%s%d", "search", i + 1);
-      clState->extra_kernels[i] = clCreateKernel(clState->program, kernel_name, &status);
-      if (status != CL_SUCCESS) {
-        applog(LOG_ERR, "Error %d: Creating ExtraKernel #%d from program. (clCreateKernel)", status, i);
-        return NULL;
-      }
-    }
   }
 
   size_t bufsize;
@@ -925,56 +973,19 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize, algorithm_t *alg
       return NULL;
     }
   }
-  
+
 	if(algorithm->type == ALGO_ETHASH)
 	{
 		readbufsize = 32UL;
 		clState->DAG = clState->EthCache = NULL;
 	}
-	
-	if(algorithm->type == ALGO_CRYPTONIGHT)
-	{
-		size_t GlobalThreads;
-		readbufsize = 76UL;
-		
-		set_threads_hashes(1, clState->compute_shaders, &GlobalThreads, 1, &cgpu->intensity, &cgpu->xintensity, &cgpu->rawintensity, &cgpu->algorithm);
-		
-		for(int i = 0; i < 4; ++i)
-		{
-			clState->BranchBuffer[i] = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, sizeof(cl_uint) * (GlobalThreads + 2), NULL, &status);
-			
-			if(status != CL_SUCCESS)
-			{
-				applog(LOG_ERR, "Error %d when creating branch buffer %d.\n", status, i);
-				return NULL;
-			}
-		}
-		
-		clState->States = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, 200 * GlobalThreads, NULL, &status);
-		
-		if(status != CL_SUCCESS)
-		{
-			applog(LOG_ERR, "Error %d when creating Cryptonight state buffer.\n", status);
-			return NULL;
-		}
-		
-		clState->Scratchpads = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, (1 << 21) * GlobalThreads, NULL, &status);
-		
-		if(status != CL_SUCCESS)
-		{
-			applog(LOG_ERR, "Error %d when creating Cryptonight scratchpads buffer.\n", status);
-			return NULL;
-		}
-	}
-			
-	
   applog(LOG_DEBUG, "Using read buffer sized %lu", (unsigned long)readbufsize);
   clState->CLbuffer0 = clCreateBuffer(clState->context, CL_MEM_READ_ONLY, readbufsize, NULL, &status);
   if (status != CL_SUCCESS) {
     applog(LOG_ERR, "Error %d: clCreateBuffer (CLbuffer0)", status);
     return NULL;
   }
-  
+
   clState->devid = cgpu->device_id;
 
   applog(LOG_DEBUG, "Using output buffer sized %lu", BUFFERSIZE);

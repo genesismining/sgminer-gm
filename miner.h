@@ -527,6 +527,18 @@ struct sgminer_pool_stats {
   uint64_t net_bytes_received;
 };
 
+typedef struct _gpu_sysfs_info
+{
+	char *HWMonPath;
+	uint32_t MinFanSpeed;
+	uint32_t MaxFanSpeed;
+	uint32_t TgtFanSpeed;
+	uint32_t OverHeatTemp;
+	uint32_t LastFanSpeed;
+	uint32_t TargetTemp;
+	float LastTemp;
+} gpu_sysfs_info;
+
 struct cgpu_info {
   int sgminer_id;
   struct device_drv *drv;
@@ -576,10 +588,10 @@ struct cgpu_info {
   float temp;
   int cutofftemp;
 
-#ifdef HAVE_ADL
   bool has_adl;
   struct gpu_adl adl;
-
+  gpu_sysfs_info sysfs_info;
+  
   int gpu_engine;
   int min_engine;
   int gpu_fan;
@@ -588,7 +600,9 @@ struct cgpu_info {
   int gpu_memdiff;
   int gpu_powertune;
   float gpu_vddc;
-#endif
+  
+  bool has_sysfs_hwcontrols;
+  
   double diff1;
   double diff_accepted;
   double diff_rejected;
@@ -1086,6 +1100,21 @@ extern int swork_id;
 extern int opt_tcp_keepalive;
 extern bool opt_incognito;
 
+extern float (*gpu_temp)(int);
+extern int (*gpu_engineclock)(int);
+extern int (*gpu_memclock)(int);
+extern float (*gpu_vddc)(int);
+extern int (*gpu_activity)(int);
+extern int (*gpu_fanspeed)(int);
+extern int (*gpu_fanpercent)(int);
+extern int (*set_powertune)(int, int);
+extern int (*set_fanspeed)(int, int);
+extern int (*set_vddc)(int, float);
+extern int (*set_engineclock)(int, int);
+extern int (*set_memoryclock)(int, int);
+extern bool (*gpu_stats)(int, float *, int *, int *, float *, int *, int *, int *, int *);
+extern void (*gpu_autotune) (int, enum dev_enable *);
+
 // Xn Algorithm options
 extern int opt_keccak_unroll;
 extern bool opt_blake_compact;
@@ -1143,14 +1172,6 @@ extern void set_target_neoscrypt(unsigned char *target, double diff, const int t
 extern void kill_work(void);
 
 extern void reinit_device(struct cgpu_info *cgpu);
-
-#ifdef HAVE_ADL
-extern bool gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, float *vddc, int *activity, int *fanspeed, int *fanpercent, int *powertune);
-extern int set_fanspeed(int gpu, int iFanSpeed);
-extern int set_vddc(int gpu, float fVddc);
-extern int set_engineclock(int gpu, int iEngineClock);
-extern int set_memoryclock(int gpu, int iMemoryClock);
-#endif
 
 extern void api(int thr_id);
 
@@ -1272,7 +1293,7 @@ struct stratum_work {
   char *nbit;
   char *ntime;
   bool clean;
-  
+
   size_t cb_len;
   size_t header_len;
   int merkles;
@@ -1302,14 +1323,8 @@ struct pool {
   uint32_t EpochNumber;
   uint8_t Target[32];
   uint8_t EthWork[32];
+  uint8_t NetDiff[32];
 
-  //XMR stuff
-  char XMRAuthID[64];
-  uint32_t XMRTarget;
-  uint8_t XMRBlob[76];
-  pthread_mutex_t XMRGlobalNonceLock;
-  uint32_t XMRGlobalNonce;
-  
   double diff_accepted;
   double diff_rejected;
   double diff_stale;
@@ -1430,6 +1445,9 @@ struct pool {
   size_t gbt_txns;
   size_t coinbase_len;
 
+  /* equihash GBT */
+  unsigned char reserved[32];
+
   /* Shared by both stratum & GBT */
   unsigned char *coinbase;
   size_t nonce2_offset;
@@ -1454,26 +1472,22 @@ struct work {
   unsigned char seedhash[32];
   unsigned char hash[32];
   unsigned char mixhash[32];
-    
+
   unsigned char device_target[32];
   double    device_diff;
   double    share_diff;
   double	network_diff;
-  
+
   uint32_t EpochNumber;
   uint64_t Nonce;
-  
-  /* cryptonight stuff */
-  uint32_t XMRTarget;
-  uint8_t XMRBlob[76];
-    
-  uint32_t XMRNonce;
-  
+
+  unsigned char equihash_data[1487];
+
   int   rolls;
   int   drv_rolllimit; /* How much the driver can roll ntime */
 
   dev_blk_ctx blk;
-  
+
   struct thr_info *thr;
   int   thr_id;
   struct pool *pool;

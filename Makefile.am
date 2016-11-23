@@ -44,6 +44,7 @@ sgminer_SOURCES += driver-opencl.c driver-opencl.h
 sgminer_SOURCES += ocl.c ocl.h
 sgminer_SOURCES += findnonce.c findnonce.h
 sgminer_SOURCES += adl.c adl.h adl_functions.h
+sgminer_SOURCES += sysfs-gpu-controls.c sysfs-gpu-controls.h
 sgminer_SOURCES += pool.c pool.h
 sgminer_SOURCES += algorithm.c algorithm.h
 sgminer_SOURCES += config_parser.c config_parser.h
@@ -76,11 +77,12 @@ sgminer_SOURCES += algorithm/lyra2re.c algorithm/lyra2re.h algorithm/lyra2.c alg
 sgminer_SOURCES += algorithm/lyra2rev2.c algorithm/lyra2rev2.h
 sgminer_SOURCES += algorithm/pluck.c algorithm/pluck.h
 sgminer_SOURCES += algorithm/credits.c algorithm/credits.h
-sgminer_SOURCES += algorithm/yescrypt.h algorithm/yescrypt.c algorithm/yescrypt_core.h algorithm/yescrypt-opt.c algorithm/yescryptcommon.c algorithm/sysendian.h 
+sgminer_SOURCES += algorithm/yescrypt.h algorithm/yescrypt.c algorithm/yescrypt_core.h algorithm/yescrypt-opt.c algorithm/yescryptcommon.c algorithm/sysendian.h
 sgminer_SOURCES += algorithm/blake256.c algorithm/blake256.h
 sgminer_SOURCES += algorithm/blakecoin.c algorithm/blakecoin.h
 sgminer_SOURCES += algorithm/ethash.c algorithm/ethgencache.c algorithm/ethash.h algorithm/eth-sha3.c algorithm/eth-sha3.h
-sgminer_SOURCES += algorithm/cryptonight.c algorithm/cryptonight.h algorithm/cn-aes-tbls.h
+sgminer_SOURCES += algorithm/equihash.c algorithm/equihash.h
+sgminer_SOURCES += gbt-util.c gbt-util.h
 
 bin_SCRIPTS	= $(top_srcdir)/kernel/*.cl
 

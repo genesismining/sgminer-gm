@@ -35,6 +35,9 @@
 #include "adl.h"
 #include "util.h"
 
+#include "algorithm/equihash.h"
+#include "kernel/equihash-param.h"
+
 /* TODO: cleanup externals ********************/
 
 #ifdef HAVE_CURSES
@@ -55,12 +58,6 @@ extern int dev_from_id(int thr_id);
 extern void decay_time(double *f, double fadd);
 
 /**********************************************/
-
-#ifdef HAVE_ADL
-extern float gpu_temp(int gpu);
-extern int gpu_fanspeed(int gpu);
-extern int gpu_fanpercent(int gpu);
-#endif
 
 char *set_vector(char *arg)
 {
@@ -215,7 +212,6 @@ char *set_thread_concurrency(const char *arg)
   return NULL;
 }
 
-#ifdef HAVE_ADL
 /* This function allows us to map an adl device to an opencl device for when
  * simple enumeration has failed to match them. */
 char *set_gpu_map(char *arg)
@@ -487,21 +483,21 @@ char *set_temp_overheat(char *arg)
   if (val < 0 || val > 200)
     return "Invalid value passed to set temp overheat";
 
-  to = &gpus[device++].adl.overtemp;
-  *to = val;
+  gpus[device].adl.overtemp = val;
+  gpus[device++].sysfs_info.OverHeatTemp = val;
 
   while ((nextptr = strtok(NULL, ",")) != NULL) {
     val = atoi(nextptr);
     if (val < 0 || val > 200)
       return "Invalid value passed to set temp overheat";
 
-    to = &gpus[device++].adl.overtemp;
-    *to = val;
+    gpus[device].adl.overtemp = val;
+	gpus[device++].sysfs_info.OverHeatTemp = val;
   }
   if (device == 1) {
     for (i = device; i < MAX_GPUDEVICES; i++) {
-      to = &gpus[i].adl.overtemp;
-      *to = val;
+      gpus[i].adl.overtemp = val;
+	gpus[i].sysfs_info.OverHeatTemp = val;
     }
   }
 
@@ -520,7 +516,9 @@ char *set_temp_target(char *arg)
   if (val < 0 || val > 200)
     return "Invalid value passed to set temp target";
 
-  tt = &gpus[device++].adl.targettemp;
+  tt = &gpus[device].adl.targettemp;
+  *tt = val;
+  tt = &gpus[device++].sysfs_info.TargetTemp;
   *tt = val;
 
   while ((nextptr = strtok(NULL, ",")) != NULL) {
@@ -528,19 +526,23 @@ char *set_temp_target(char *arg)
     if (val < 0 || val > 200)
       return "Invalid value passed to set temp target";
 
-    tt = &gpus[device++].adl.targettemp;
+    tt = &gpus[device].adl.targettemp;
     *tt = val;
+    tt = &gpus[device++].sysfs_info.TargetTemp;
+	*tt = val;
+    
   }
   if (device == 1) {
     for (i = device; i < MAX_GPUDEVICES; i++) {
       tt = &gpus[i].adl.targettemp;
       *tt = val;
+      tt = &gpus[i].sysfs_info.TargetTemp;
+	  *tt = val;
     }
   }
 
   return NULL;
 }
-#endif
 
 char *set_intensity(const char *_arg)
 {
@@ -754,8 +756,8 @@ retry: // TODO: refactor
       gpu, displayed_rolling, displayed_total, mhash_base ? "M" : "K",
       cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
       cgpu->utility, cgpu->intensity, cgpu->xintensity, cgpu->rawintensity);
-#ifdef HAVE_ADL
-    if (gpus[gpu].has_adl) {
+
+    if (gpus[gpu].has_adl || gpus[gpu].has_sysfs_hwcontrols) {
       int engineclock = 0, memclock = 0, activity = 0, fanspeed = 0, fanpercent = 0, powertune = 0;
       float temp = 0, vddc = 0;
 
@@ -787,7 +789,6 @@ retry: // TODO: refactor
         _wlog(logline);
       }
     }
-#endif
     wlog("Last initialised: %s\n", cgpu->init);
 
     rd_lock(&mining_thr_lock);
@@ -1211,9 +1212,11 @@ static void opencl_detect(void)
     cgpu->algorithm = default_profile.algorithm;
     add_cgpu(cgpu);
   }
-
-  if (!opt_noadl)
+  
+  if(!init_sysfs_hwcontrols(nDevs) && !opt_noadl)
+  {
     init_adl(nDevs);
+  }
 }
 
 static void reinit_opencl_device(struct cgpu_info *gpu)
@@ -1221,10 +1224,10 @@ static void reinit_opencl_device(struct cgpu_info *gpu)
   tq_push(control_thr[gpur_thr_id].q, gpu);
 }
 
-#ifdef HAVE_ADL
 static void get_opencl_statline_before(char *buf, size_t bufsiz, struct cgpu_info *gpu)
 {
-  if (gpu->has_adl) {
+  if (gpu->has_adl || gpu->has_sysfs_hwcontrols)
+  {
     int gpuid = gpu->device_id;
     float gt = gpu_temp(gpuid);
     int gf = gpu_fanspeed(gpuid);
@@ -1246,7 +1249,6 @@ static void get_opencl_statline_before(char *buf, size_t bufsiz, struct cgpu_inf
   else
     gpu->drv->get_statline_before = &blank_get_statline_before;
 }
-#endif
 
 static void get_opencl_statline(char *buf, size_t bufsiz, struct cgpu_info *gpu)
 {
@@ -1332,7 +1334,7 @@ static bool opencl_thread_init(struct thr_info *thr)
   cl_int status = 0;
   thrdata = (struct opencl_thread_data *)calloc(1, sizeof(*thrdata));
   thr->cgpu_data = thrdata;
-  int buffersize = BUFFERSIZE;
+  int buffersize = (gpu->algorithm.type == ALGO_EQUIHASH) ? sizeof(sols_t) : BUFFERSIZE; //MAX(BUFFERSIZE, sizeof(sols_t));
 
   if (!thrdata) {
     applog(LOG_ERR, "Failed to calloc in opencl_thread_init");
@@ -1353,7 +1355,7 @@ static bool opencl_thread_init(struct thr_info *thr)
   if (unlikely(status != CL_SUCCESS)) {
     free(thrdata->res);
     free(thrdata);
-    applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed.");
+    applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed (opencl_thread_init) (status = %d).", status);
     return false;
   }
 
@@ -1369,11 +1371,13 @@ static bool opencl_prepare_work(struct thr_info __maybe_unused *thr, struct work
   work->blk.work = work;
   if (work->pool->algorithm.precalc_hash) work->pool->algorithm.precalc_hash(&work->blk, 0, (uint32_t *)(work->data));
   thr->pool_no = work->pool->pool_no;
-  
+
   return true;
 }
 
+
 extern int opt_dynamic_interval;
+uint32_t verify_sol(struct work *, sols_t *, int);
 
 static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
   int64_t __maybe_unused max_nonce)
@@ -1411,136 +1415,81 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
     memcpy(&(gpu->tv_gpustart), &tv_gpuend, sizeof(struct timeval));
     gpu->intervals = 0;
   }
-  
+
   set_threads_hashes(clState->vwidth, clState->compute_shaders, &hashes, globalThreads, localThreads[0],
     &gpu->intensity, &gpu->xintensity, &gpu->rawintensity, &gpu->algorithm);
   if (hashes > gpu->max_hashes)
     gpu->max_hashes = hashes;
 
+  if (gpu->algorithm.type == ALGO_EQUIHASH) {
+    int64_t ret = 0;
+    size_t length = sizeof(sols_t);
+    uint64_t t0 = time(NULL);
+    uint8_t prev_hash[32];
+    size_t txns;
+    bool stale = false;
+    
+    if (work->getwork_mode != GETWORK_MODE_STRATUM) {
+      cg_rlock(&work->pool->gbt_lock);
+      txns = work->pool->gbt_txns;
+      memcpy(prev_hash, work->pool->previousblockhash, 32);
+      cg_runlock(&work->pool->gbt_lock);
+    }
+    
+    thrdata->res = realloc(thrdata->res, length);
+    sols_t *sols = (sols_t*) thrdata->res;
+    work->thr = thr;
+    do {
+      status = thrdata->queue_kernel_parameters(clState, &work->blk, globalThreads[0]);
+      status |= clEnqueueReadBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0, length, thrdata->res, 0, NULL,  NULL);
+      if (status == CL_SUCCESS) {
+        if (sols->nr > MAX_SOLS) {
+          applog(LOG_DEBUG, "equihash: %d (probably invalid) solutions were dropped!", sols->nr - MAX_SOLS);
+          sols->nr = MAX_SOLS;
+        }
+        for (int sol_i = 0; sol_i < sols->nr; sol_i++)
+          ret += verify_sol(work, sols, sol_i);
+      }
+      else {
+        applog(LOG_ERR, "Error %d: Reading result buffer for ALGO_EQUIHASH failed. (clEnqueueReadBuffer)", status);
+        return -1;
+      }
+      
+      work->blk.nonce++;
+      if (work->getwork_mode != GETWORK_MODE_STRATUM) {
+        *(uint64_t*)(work->equihash_data + 108) += 1;  // increase nonce
+        
+        cg_rlock(&work->pool->gbt_lock);
+        stale = (work->pool->gbt_txns != txns) || (memcmp(prev_hash, work->pool->previousblockhash, 32) != 0);
+        cg_runlock(&work->pool->gbt_lock);
+      }
+    } while ((time(NULL) - t0) <= 3 && !stale); 
+    return ret;
+  }
+  
   status = thrdata->queue_kernel_parameters(clState, &work->blk, globalThreads[0]);
   if (unlikely(status != CL_SUCCESS)) {
     applog(LOG_ERR, "Error: clSetKernelArg of all params failed.");
     return -1;
   }
-  
-  if(gpu->algorithm.type == ALGO_CRYPTONIGHT)
-  {
-	mutex_lock(&work->pool->XMRGlobalNonceLock);
-	work->blk.nonce = work->pool->XMRGlobalNonce;
-	work->pool->XMRGlobalNonce += gpu->max_hashes;
-	mutex_unlock(&work->pool->XMRGlobalNonceLock);
-  }
-  
+
   if (clState->goffset)
     p_global_work_offset = (size_t *)&work->blk.nonce;
-  
-	if(gpu->algorithm.type == ALGO_CRYPTONIGHT)
-	{
-		size_t GlobalThreads = *globalThreads, Nonce[2] = { (size_t)work->blk.nonce, 1}, gthreads[2] = { *globalThreads, 8 }, lthreads[2] = { *localThreads, 8 };
-		size_t BranchBufCount[4] = { 0, 0, 0, 0 };
-		
-		for(int i = 0; i < 4; ++i)
-		{
-			cl_uint zero = 0;
 
-			status = clEnqueueWriteBuffer(clState->commandQueue, clState->BranchBuffer[i], CL_FALSE, sizeof(cl_uint) * GlobalThreads, sizeof(cl_uint), &zero, 0, NULL, NULL);
+  status = clEnqueueNDRangeKernel(clState->commandQueue, clState->kernel, 1, p_global_work_offset,
+    globalThreads, localThreads, 0, NULL, NULL);
+  if (unlikely(status != CL_SUCCESS)) {
+    applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)", status);
+    return -1;
+  }
 
-			if(status != CL_SUCCESS)
-			{
-				applog(LOG_ERR, "Error %d while resetting branch buffer counter %d.\n", status, i);
-				return(-1);
-			}
-		}
-		
-		clFinish(clState->commandQueue);
-		
-		// Main CN P0
-		status = clEnqueueNDRangeKernel(clState->commandQueue, clState->kernel, 2, Nonce, gthreads, lthreads, 0, NULL, NULL);
-		
-		if(status != CL_SUCCESS)
-		{
-			applog(LOG_ERR, "Error %d while attempting to enqueue kernel 0.", status);
-			return(-1);
-		}
-		
-		// Main CN P1
-		status = clEnqueueNDRangeKernel(clState->commandQueue, clState->extra_kernels[0], 1, p_global_work_offset, globalThreads, localThreads, 0, NULL, NULL);
-		
-		if(status != CL_SUCCESS)
-		{
-			applog(LOG_ERR, "Error %d while attempting to enqueue kernel 1.", status);
-			return(-1);
-		}
-		
-		// Main CN P2
-		status = clEnqueueNDRangeKernel(clState->commandQueue, clState->extra_kernels[1], 2, Nonce, gthreads, lthreads, 0, NULL, NULL);
-		
-		if(status != CL_SUCCESS)
-		{
-			applog(LOG_ERR, "Error %d while attempting to enqueue kernel 2.", status);
-			return(-1);
-		}
-		
-		// Read BranchBuf counters
-		
-		for(int i = 0; i < 4; ++i)
-		{
-			status = clEnqueueReadBuffer(clState->commandQueue, clState->BranchBuffer[i], CL_FALSE, sizeof(cl_uint) * GlobalThreads, sizeof(cl_uint), BranchBufCount + i, 0, NULL, NULL);
-			
-			if(status != CL_SUCCESS)
-			{
-				applog(LOG_ERR, "Error %d while attempting to read branch buffer counter %d.", status, i);
-				return(-1);
-			}
-		}
-		
-		clFinish(clState->commandQueue);
-		
-		for(int i = 0; i < 4; ++i)
-		{
-			if(BranchBufCount[i])
-			{
-				cl_ulong tmp = BranchBufCount[i];
-				
-				// Threads
-				status = clSetKernelArg(clState->extra_kernels[i + 2], 4, sizeof(cl_ulong), &tmp);
-				
-				if(status != CL_SUCCESS)
-				{
-					applog(LOG_ERR, "Error %d while attempting to set argument 4 for kernel %d.", status, i + 2);
-					return(-1);
-				}
-				
-				// Make it a multiple of the local worksize (some drivers will otherwise shit a brick)
-				BranchBufCount[i] += (clState->wsize - (BranchBufCount[i] & (clState->wsize - 1)));
-				
-				status = clEnqueueNDRangeKernel(clState->commandQueue, clState->extra_kernels[i + 2], 1, p_global_work_offset, BranchBufCount + i, localThreads, 0, NULL, NULL);
-				
-				if(status != CL_SUCCESS)
-				{
-					applog(LOG_ERR, "Error %d while attempting to enqueue kernel %d.", status, i + 2);
-					return(-1);
-				}
-			}
-		}
-	}
-  else
-  {
-	  status = clEnqueueNDRangeKernel(clState->commandQueue, clState->kernel, 1, p_global_work_offset,
-		globalThreads, localThreads, 0, NULL, NULL);
-	  if (unlikely(status != CL_SUCCESS)) {
-		applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)", status);
-		return -1;
-	  }
-
-	  for (i = 0; i < clState->n_extra_kernels; i++) {
-		status = clEnqueueNDRangeKernel(clState->commandQueue, clState->extra_kernels[i], 1, p_global_work_offset,
-		  globalThreads, localThreads, 0, NULL, NULL);
-		if (unlikely(status != CL_SUCCESS)) {
-		  applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)", status);
-		  return -1;
-		}
-	  }
+  for (i = 0; i < clState->n_extra_kernels; i++) {
+    status = clEnqueueNDRangeKernel(clState->commandQueue, clState->extra_kernels[i], 1, p_global_work_offset,
+      globalThreads, localThreads, 0, NULL, NULL);
+    if (unlikely(status != CL_SUCCESS)) {
+      applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)", status);
+      return -1;
+    }
   }
 
   status = clEnqueueReadBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
@@ -1564,7 +1513,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
     status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
       buffersize, blank_res, 0, NULL, NULL);
     if (unlikely(status != CL_SUCCESS)) {
-      applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed.");
+      applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed (opencl_scanhash).");
       return -1;
     }
     applog(LOG_DEBUG, "GPU %d found something?", gpu->device_id);
@@ -1601,8 +1550,6 @@ static void opencl_thread_shutdown(struct thr_info *thr)
 	clReleaseMemObject(clState->buffer3);
     if (clState->padbuffer8)
       clReleaseMemObject(clState->padbuffer8);
-    if(clState->States) clReleaseMemObject(clState->States);
-    if(clState->Scratchpads) clReleaseMemObject(clState->Scratchpads);
     clReleaseKernel(clState->kernel);
     for (i = 0; i < clState->n_extra_kernels; i++)
       clReleaseKernel(clState->extra_kernels[i]);
@@ -1613,8 +1560,9 @@ static void opencl_thread_shutdown(struct thr_info *thr)
       free(clState->extra_kernels);
     free(clState);
   }
-  free(((struct opencl_thread_data *)thr->cgpu_data)->res);
-  free(thr->cgpu_data);
+  // Causes invalid free crashes in some cases.
+  //free(((struct opencl_thread_data *)thr->cgpu_data)->res);
+  //free(thr->cgpu_data);
   thr->cgpu_data = NULL;
 }
 

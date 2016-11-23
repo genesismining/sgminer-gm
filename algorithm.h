@@ -38,11 +38,12 @@ typedef enum {
   ALGO_BLAKE,
   ALGO_VANILLA,
   ALGO_ETHASH,
-  ALGO_CRYPTONIGHT
+  ALGO_EQUIHASH
 } algorithm_type_t;
 
 extern const char *algorithm_type_str[];
 
+extern void sha256(const unsigned char *message, unsigned int len, unsigned char *digest);
 extern void gen_hash(const unsigned char *data, unsigned int len, unsigned char *hash);
 
 struct __clState;
@@ -60,6 +61,7 @@ typedef struct _algorithm_t {
   const char *kernelfile; /* alternate kernel file */
   uint32_t n;        /* N (CPU/Memory tradeoff parameter) */
   uint8_t  nfactor;  /* Factor of N above (n = 2^nfactor) */
+  uint8_t  kfactor;  /* Factor of N above (n = 2^nfactor) */
   double   diff_multiplier1;
   double   diff_multiplier2;
   double   share_diff_multiplier;
@@ -106,6 +108,9 @@ void set_algorithm(algorithm_t* algo, const char* name);
 
 /* Set to specific N factor. */
 void set_algorithm_nfactor(algorithm_t* algo, const uint8_t nfactor);
+
+/* Set to specific K factor. */
+void set_algorithm_kfactor(algorithm_t* algo, const uint8_t kfactor);
 
 /* Compare two algorithm parameters */
 bool cmp_algorithm(const algorithm_t* algo1, const algorithm_t* algo2);

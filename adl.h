@@ -7,19 +7,20 @@ extern bool opt_reorder;
 extern int opt_hysteresis;
 extern int opt_targettemp;
 extern int opt_overheattemp;
+
 void init_adl(int nDevs);
-float gpu_temp(int gpu);
-int gpu_engineclock(int gpu);
-int gpu_memclock(int gpu);
-float gpu_vddc(int gpu);
-int gpu_activity(int gpu);
-int gpu_fanspeed(int gpu);
-int gpu_fanpercent(int gpu);
-extern int set_powertune(int gpu, int iPercentage);
-bool gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, float *vddc,
+float adl_gpu_temp(int gpu);
+int adl_gpu_engineclock(int gpu);
+int adl_gpu_memclock(int gpu);
+float adl_gpu_vddc(int gpu);
+int adl_gpu_activity(int gpu);
+int adl_gpu_fanspeed(int gpu);
+int adl_gpu_fanpercent(int gpu);
+extern int adl_set_powertune(int gpu, int iPercentage);
+bool adl_gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, float *vddc,
                int *activity, int *fanspeed, int *fanpercent, int *powertune);
 void change_gpusettings(int gpu);
-void gpu_autotune(int gpu, enum dev_enable *denable);
+void adl_gpu_autotune(int gpu, enum dev_enable *denable);
 void clear_adl(int nDevs);
 
 #else /* HAVE_ADL */
