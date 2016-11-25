@@ -529,14 +529,14 @@ struct sgminer_pool_stats {
 
 typedef struct _gpu_sysfs_info
 {
-	char *HWMonPath;
-	uint32_t MinFanSpeed;
-	uint32_t MaxFanSpeed;
-	uint32_t TgtFanSpeed;
-	uint32_t OverHeatTemp;
-	uint32_t LastFanSpeed;
-	uint32_t TargetTemp;
-	float LastTemp;
+  char *HWMonPath;
+  uint32_t MinFanSpeed;
+  uint32_t MaxFanSpeed;
+  uint32_t OverHeatTemp;
+  uint32_t TargetTemp;
+  float TgtFanSpeed;
+  float LastFanSpeed;
+  float LastTemp;
 } gpu_sysfs_info;
 
 struct cgpu_info {
@@ -588,6 +588,7 @@ struct cgpu_info {
   float temp;
   int cutofftemp;
 
+  bool has_sysfs_hwcontrols;
   bool has_adl;
   struct gpu_adl adl;
   gpu_sysfs_info sysfs_info;
@@ -600,8 +601,6 @@ struct cgpu_info {
   int gpu_memdiff;
   int gpu_powertune;
   float gpu_vddc;
-  
-  bool has_sysfs_hwcontrols;
   
   double diff1;
   double diff_accepted;
@@ -1106,9 +1105,9 @@ extern int (*gpu_memclock)(int);
 extern float (*gpu_vddc)(int);
 extern int (*gpu_activity)(int);
 extern int (*gpu_fanspeed)(int);
-extern int (*gpu_fanpercent)(int);
+extern float (*gpu_fanpercent)(int);
 extern int (*set_powertune)(int, int);
-extern int (*set_fanspeed)(int, int);
+extern int (*set_fanspeed)(int, float);
 extern int (*set_vddc)(int, float);
 extern int (*set_engineclock)(int, int);
 extern int (*set_memoryclock)(int, int);

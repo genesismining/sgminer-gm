@@ -34,6 +34,7 @@
 #include "ocl.h"
 #include "adl.h"
 #include "util.h"
+#include "sysfs-gpu-controls.h"
 
 #include "algorithm/equihash.h"
 
@@ -1212,8 +1213,7 @@ static void opencl_detect(void)
     add_cgpu(cgpu);
   }
   
-  if(!init_sysfs_hwcontrols(nDevs) && !opt_noadl)
-  {
+  if(!init_sysfs_hwcontrols(nDevs) && !opt_noadl) {
     init_adl(nDevs);
   }
 }
@@ -1225,8 +1225,7 @@ static void reinit_opencl_device(struct cgpu_info *gpu)
 
 static void get_opencl_statline_before(char *buf, size_t bufsiz, struct cgpu_info *gpu)
 {
-  if (gpu->has_adl || gpu->has_sysfs_hwcontrols)
-  {
+  if (gpu->has_adl || gpu->has_sysfs_hwcontrols) {
     int gpuid = gpu->device_id;
     float gt = gpu_temp(gpuid);
     int gf = gpu_fanspeed(gpuid);

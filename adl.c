@@ -122,7 +122,7 @@ static  ADL_OVERDRIVE6_POWERCONTROL_SET   ADL_Overdrive6_PowerControl_Set;
 static int iNumberAdapters;
 static LPAdapterInfo lpInfo = NULL;
 
-int adl_set_fanspeed(int gpu, int iFanSpeed);
+int adl_set_fanspeed(int gpu, float iFanSpeed);
 static float __gpu_temp(struct gpu_adl *ga);
 
 char *adl_error_desc(int error)
@@ -480,7 +480,7 @@ static int __gpu_fanpercent(struct gpu_adl *ga)
   return ga->lpFanSpeedValue.iFanSpeed;
 }
 
-int adl_gpu_fanpercent(int gpu)
+float adl_gpu_fanpercent(int gpu)
 {
   struct gpu_adl *ga;
   int ret = -1;
@@ -493,24 +493,10 @@ int adl_gpu_fanpercent(int gpu)
   ret = __gpu_fanpercent(ga);
   unlock_adl();
   if (unlikely(ga->has_fanspeed && ret == -1)) {
-#if 0
-    /* Recursive calling applog causes a hang, so disable messages */
-    applog(LOG_WARNING, "GPU %d stopped reporting fanspeed due to driver corruption", gpu);
-    if (opt_restart) {
-      applog(LOG_WARNING, "Restart enabled, will attempt to restart sgminer");
-      applog(LOG_WARNING, "You can disable this with the --no-restart option");
-      app_restart();
-    }
-    applog(LOG_WARNING, "Disabling fanspeed monitoring on this device");
+    applog(LOG_WARNING, "GPU %d stopped reporting fanspeed due to driver corruption\nDisabling fanspeed monitoring on this device", gpu);
     ga->has_fanspeed = false;
     if (ga->twin) {
       applog(LOG_WARNING, "Disabling fanspeed linking on GPU twins");
-      ga->twin->twin = NULL;;
-      ga->twin = NULL;
-    }
-#endif
-    ga->has_fanspeed = false;
-    if (ga->twin) {
       ga->twin->twin = NULL;;
       ga->twin = NULL;
     }
@@ -773,10 +759,11 @@ static void get_fanrange(int gpu, int *imin, int *imax)
   *imax = ga->lpFanSpeedInfo.iMaxPercent;
 }
 
-int adl_set_fanspeed(int gpu, int iFanSpeed)
+int adl_set_fanspeed(int gpu, float FanSpeed)
 {
   struct gpu_adl *ga;
   int ret = 1;
+  int iFanSpeed = FanSpeed;
 
   if (!gpus[gpu].has_adl || !adl_active) {
     wlogprint("Set fanspeed not supported\n");
@@ -845,7 +832,7 @@ int adl_set_powertune(int gpu, int iPercentage)
 static bool fan_autotune(int gpu, int temp, int fanpercent, int lasttemp, bool *fan_window)
 {
   struct cgpu_info *cgpu = &gpus[gpu];
-  int tdiff = round((double)(temp - lasttemp));
+  int tdiff = temp - lasttemp;
   struct gpu_adl *ga = &cgpu->adl;
   int top = gpus[gpu].gpu_fan;
   int bot = gpus[gpu].min_fan;

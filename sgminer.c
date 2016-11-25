@@ -77,13 +77,13 @@ int (*gpu_memclock)(int);
 float (*gpu_vddc)(int);
 int (*gpu_activity)(int);
 int (*gpu_fanspeed)(int);
-int (*gpu_fanpercent)(int);
+float (*gpu_fanpercent)(int);
 
 int (*set_powertune)(int, int);
 int (*set_vddc)(int, float);
 int (*set_engineclock)(int, int);
 int (*set_memoryclock)(int, int);
-int (*set_fanspeed)(int, int);
+int (*set_fanspeed)(int, float);
 
 bool (*gpu_stats)(int, float *, int *, int *, float *, int *, int *, int *, int *);
 
