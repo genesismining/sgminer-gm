@@ -8980,9 +8980,9 @@ void fill_device_drv(struct device_drv *drv)
 
 void enable_device(int i)
 {
-  rd_lock(&devices_lock);
+  wr_lock(&devices_lock);
   devices[i]->deven = DEV_ENABLED;
-  rd_unlock(&devices_lock);
+  wr_unlock(&devices_lock);
 }
 
 struct _cgpu_devid_counter {
@@ -9018,15 +9018,12 @@ bool add_cgpu(struct cgpu_info *cgpu)
     HASH_ADD_STR(devids, name, d);
   }
 
-  wr_lock(&devices_lock);
-  devices = (struct cgpu_info **)realloc(devices, sizeof(struct cgpu_info *) * (total_devices + 2));
-  wr_unlock(&devices_lock);
-
   mutex_lock(&stats_lock);
   cgpu->last_device_valid_work = time(NULL);
   mutex_unlock(&stats_lock);
 
   wr_lock(&devices_lock);
+  devices = (struct cgpu_info **)realloc(devices, sizeof(struct cgpu_info *) * (total_devices + 2));
   devices[total_devices++] = cgpu;
   wr_unlock(&devices_lock);
 
