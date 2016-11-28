@@ -175,64 +175,61 @@ static bool sysfs_fan_autotune(int gpu, int temp, float fanpercent, int lasttemp
   int tdiff = temp - lasttemp;
   int top = gpus[gpu].gpu_fan;
   int bot = gpus[gpu].min_fan;
-  float newpercent = fanpercent;
+  float newpercent = SysFSInfo->TgtFanSpeed;//fanpercent;
   float iMin = 0, iMax = 100;
     
-  if(temp > SysFSInfo->OverHeatTemp && fanpercent < iMax)
-  {
+  if (temp > SysFSInfo->OverHeatTemp && fanpercent < iMax) {
     applog(LOG_WARNING, "Overheat detected on GPU %d, increasing fan to 100%% (temp was %d, overtemp is %d)\n", gpu, temp, SysFSInfo->OverHeatTemp);
     newpercent = iMax;
 
     dev_error(cgpu, REASON_DEV_OVER_HEAT);
-    
   }
-  else if (temp > SysFSInfo->TargetTemp && fanpercent < top && tdiff >= 0)
-  {
+  else if (temp > SysFSInfo->TargetTemp && fanpercent < top && tdiff >= 0) {
     applog(LOG_DEBUG, "Temperature over target, increasing fanspeed");
-    if(temp > SysFSInfo->TargetTemp + opt_hysteresis) newpercent = SysFSInfo->TgtFanSpeed + 10;
-    else newpercent = SysFSInfo->TgtFanSpeed + 5;
+    if (temp > SysFSInfo->TargetTemp + opt_hysteresis)
+      newpercent = SysFSInfo->TgtFanSpeed + 10;
+    else
+      newpercent = SysFSInfo->TgtFanSpeed + 5;
     
-    if(newpercent > top) newpercent = top;
+    if (newpercent > top)
+      newpercent = top;
   }
-  else if(fanpercent > bot && temp < SysFSInfo->TargetTemp - opt_hysteresis)
-  {
+  else if (fanpercent > bot && temp < SysFSInfo->TargetTemp - opt_hysteresis) {
     /* Detect large swings of 5 degrees or more and change fan by
      * a proportion more */
-    if(tdiff <= 0)
-    {
+    if(tdiff <= 0) {
       applog(LOG_DEBUG, "Temperature %d degrees below target, decreasing fanspeed", opt_hysteresis);
       newpercent = SysFSInfo->TgtFanSpeed - 1 + tdiff / 5;
     }
-    else if (tdiff >= 5)
-    {
+    else if (tdiff >= 5) {
       applog(LOG_DEBUG, "Temperature climbed %d while below target, increasing fanspeed", tdiff);
       newpercent = SysFSInfo->TgtFanSpeed + tdiff / 5;
     }
   }
-  else
-  {
+  else {
     /* We're in the optimal range, make minor adjustments if the
      * temp is still drifting */
-    if(fanpercent > bot && tdiff < 0 && lasttemp < SysFSInfo->TargetTemp)
-    {
+    if (fanpercent > bot && tdiff < 0 && lasttemp < SysFSInfo->TargetTemp) {
       applog(LOG_DEBUG, "Temperature dropping while in target range, decreasing fanspeed");
       newpercent = SysFSInfo->TgtFanSpeed + tdiff;
     }
-    else if(fanpercent < top && tdiff > 0 && temp > SysFSInfo->TargetTemp - opt_hysteresis)
-    {
+    else if (fanpercent < top && tdiff > 0 && temp > SysFSInfo->TargetTemp - opt_hysteresis) {
       applog(LOG_DEBUG, "Temperature rising while in target range, increasing fanspeed");
       newpercent = SysFSInfo->TgtFanSpeed + tdiff;
     }
   }
 
-  if(newpercent > iMax) newpercent = iMax;
-  else if(newpercent < iMin) newpercent = iMin;
+  if (newpercent > iMax)
+    newpercent = iMax;
+  else if (newpercent < iMin)
+    newpercent = iMin;
 
-  if(newpercent <= top) *fan_window = true;
-  else *fan_window = false;
+  if (newpercent <= top)
+    *fan_window = true;
+  else
+    *fan_window = false;
 
-  if (newpercent != fanpercent)
-  {
+  if (newpercent != fanpercent) {
     applog(LOG_INFO, "Setting GPU %d fan percentage to %d", gpu, newpercent);
     
     set_fanspeed(gpu, newpercent);
@@ -240,7 +237,8 @@ static bool sysfs_fan_autotune(int gpu, int temp, float fanpercent, int lasttemp
     /* If the fanspeed is going down and we're below the top speed,
      * consider the fan optimal to prevent minute changes in
      * fanspeed delaying GPU engine speed changes */
-    if(newpercent < fanpercent && *fan_window) return true;
+    if (newpercent < fanpercent && *fan_window)
+      return true;
     
     return false;
   }
@@ -250,10 +248,10 @@ static bool sysfs_fan_autotune(int gpu, int temp, float fanpercent, int lasttemp
 void sysfs_gpu_autotune(int gpu, enum dev_enable *denable)
 {
   bool dummy;
-  int Temp = sysfs_gpu_temp(gpu);
+  int temp = sysfs_gpu_temp(gpu);
   
-  sysfs_fan_autotune(gpu, Temp, sysfs_gpu_fanpercent(gpu), gpus[gpu].sysfs_info.LastTemp, &dummy);
-  gpu[gpus].sysfs_info.LastTemp = Temp;
+  sysfs_fan_autotune(gpu, temp, gpus[gpu].sysfs_info.TgtFanSpeed, gpus[gpu].sysfs_info.LastTemp, &dummy);
+  gpu[gpus].sysfs_info.LastTemp = temp;
 }
 
 bool sysfs_gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, float *vddc,
