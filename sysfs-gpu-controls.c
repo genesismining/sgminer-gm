@@ -149,7 +149,7 @@ float sysfs_gpu_fanpercent(int gpu)
   
   Speed = strtoul(SpeedStr, NULL, 10);
   
-  return fanpercent_to_speed(gpu, Speed);
+  return fanspeed_to_percent(gpu, Speed);
 }
 
 int sysfs_set_fanspeed(int gpu, float FanSpeed)
