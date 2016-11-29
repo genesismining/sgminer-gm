@@ -164,9 +164,6 @@ static bool opt_morenotices;
 uint8_t entropy[32];
 uint32_t eth_nonce;
 pthread_mutex_t eth_nonce_lock;
-uint32_t EthereumEpochNumber = 0;
-cglock_t EthCacheLock[2];
-uint8_t* EthCache[2];
 bool opt_autofan;
 bool opt_autoengine;
 bool opt_noadl;
@@ -268,7 +265,7 @@ unsigned int local_work;
 unsigned int total_go, total_ro;
 
 struct pool **pools;
-static struct pool *currentpool = NULL;
+struct pool *currentpool = NULL;
 
 struct strategies strategies[] = {
   { "Failover" },
@@ -347,6 +344,36 @@ struct work *staged_work = NULL;
 struct schedtime schedstart;
 struct schedtime schedstop;
 bool sched_paused;
+
+static void set_current_pool(struct pool *pool) {
+  applog(LOG_DEBUG, "Trying to set current pool...");
+  bool free_dag = (currentpool != NULL && currentpool->algorithm.type == ALGO_ETHASH && pool->algorithm.type != ALGO_ETHASH);
+  if (free_dag) {
+    cg_wlock(&currentpool->data_lock);
+    eth_cache_t *cache = &currentpool->eth_cache;
+    for (int i = 0; i < cache->nDevs; i++) {
+      cg_wlock(&cache->dags[i]->lock);
+      if (cache->dags[i]->dag_buffer != NULL)
+        clReleaseMemObject(cache->dags[i]->dag_buffer);
+      cache->dags[i]->dag_buffer = NULL;
+      cache->dags[i]->pool = NULL;
+      cache->dags[i]->max_epoch = 0;
+      cache->dags[i]->current_epoch = UINT32_MAX;
+      cg_wunlock(&cache->dags[i]->lock);
+    }
+    free(cache->dags);
+    cache->dags = NULL;
+    cache->nDevs = 0;
+    cache->disabled = true;
+    cg_wunlock(&currentpool->data_lock);
+  }
+  currentpool = pool;
+
+  cg_wlock(&currentpool->data_lock);
+  if (currentpool->algorithm.type == ALGO_ETHASH) 
+    currentpool->eth_cache.disabled = false;
+  cg_wunlock(&currentpool->data_lock);
+}
 
 static bool time_before(struct tm *tm1, struct tm *tm2)
 {
@@ -2122,9 +2149,8 @@ static double get_work_blockdiff(const struct work *work)
     diff64 = bswap_64(((uint64_t)(be32toh(*((uint32_t *)(work->data + 72))) & 0xFFFFFF00)) << 8);
     numerator = (double)work->pool->algorithm.diff_numerator;
   }
-  if(work->pool->algorithm.type == ALGO_ETHASH)
-  {
-	  return(work->network_diff);
+  if (work->pool->algorithm.type == ALGO_ETHASH) {
+    return work->network_diff;
   }
   else {
     uint8_t pow = work->data[72];
@@ -2483,13 +2509,13 @@ out:
 }
 
 
-bool parse_diff_ethash(char* Target, char* TgtStr);
+bool parse_diff_ethash(char* Target, const char* TgtStr);
 static bool work_decode_eth(struct pool *pool, struct work *work, json_t *val, json_t *ethval2)
 {
   int i;
   bool ret = false;
   uint8_t EthWork[32], SeedHash[32], Target[32];
-  char *EthWorkStr, *SeedHashStr, *TgtStr, *BlockHeightStr, *NetDiffStr, FinalNetDiffStr[65];
+  const char *EthWorkStr, *SeedHashStr, *TgtStr, *BlockHeightStr, *NetDiffStr, FinalNetDiffStr[65];
 
   cgtime(&pool->tv_lastwork);
 
@@ -2554,18 +2580,24 @@ static bool work_decode_eth(struct pool *pool, struct work *work, json_t *val, j
 	else if(!hex2bin(FinalNetDiffStr, NetDiffStr + 2, 32UL)) return(false);
 	*/
 
-  if (memcmp(pool->SeedHash, SeedHash, 32)) {
-    pool->EpochNumber = EthCalcEpochNumber(SeedHash);
-    memcpy(pool->SeedHash, SeedHash, 32);
+  cg_ilock(&pool->data_lock);
+  if (memcmp(pool->eth_cache.seed_hash, SeedHash, 32)) {
+    cg_ulock(&pool->data_lock);
+    pool->eth_cache.current_epoch = EthCalcEpochNumber(SeedHash);
+    memcpy(pool->eth_cache.seed_hash, SeedHash, 32);
+    eth_gen_cache(pool);
+    cg_dwlock(&pool->data_lock);
   }
+  else
+    cg_dlock(&pool->data_lock);
+  //work->height = strtoul(BlockHeightStr + 2, NULL, 16) / 30000UL;
+  work->eth_epoch = pool->eth_cache.current_epoch;
+  cg_runlock(&pool->data_lock);
 
   memcpy(work->data, EthWork, 32);
-  memcpy(work->seedhash, pool->SeedHash, 32);
   swab256(work->target, Target);
 
   //work->network_diff = eth2pow256 / le256todouble(FinalNetDiffStr);
-  //work->EpochNumber = strtoul(BlockHeightStr + 2, NULL, 16) / 30000UL;
-  work->EpochNumber = pool->EpochNumber;
   cgtime(&work->tv_staged);
   ret = true;
 
@@ -3478,8 +3510,9 @@ out:
   return rc;
 }
 
-const char eth_getwork_rpc[] = "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getWork\",\"params\":[],\"id\":1}";
-const char eth_gethighestblock_rpc[] = "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getBlockByNumber\",\"params\":[\"latest\", false],\"id\":1}";
+
+char eth_getwork_rpc[] = "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getWork\",\"params\":[],\"id\":1}";
+char eth_gethighestblock_rpc[] = "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getBlockByNumber\",\"params\":[\"latest\", false],\"id\":1}";
 
 static bool get_upstream_work(struct work *work, CURL *curl, char *curl_err_str)
 {
@@ -4436,7 +4469,7 @@ void __switch_pools(struct pool *selected, bool saveprio)
       break;
   }
 
-  currentpool = pools[pool_no];
+  set_current_pool(pools[pool_no]);
   pool = currentpool;
   on_backup_pool = pool->backup;
   cg_wunlock(&control_lock);
@@ -6481,10 +6514,9 @@ static void gen_stratum_work_eth(struct pool *pool, struct work *work)
   applog(LOG_DEBUG, "[THR%d] gen_stratum_work() - algorithm = %s", work->thr_id, pool->algorithm.name);
 
   cg_rlock(&pool->data_lock);
-  work->EpochNumber = pool->EpochNumber;
+  work->eth_epoch = pool->eth_cache.current_epoch;
   work->job_id = strdup(pool->swork.job_id);
   memcpy(work->data, pool->EthWork, 32);
-  memcpy(work->seedhash, pool->SeedHash, 32);
   memcpy(work->target, pool->Target, 32);
   work->sdiff = pool->swork.diff;
   work->work_difficulty = pool->swork.diff;
@@ -6726,110 +6758,13 @@ static void apply_initial_gpu_settings(struct pool *pool)
   rd_lock(&mining_thr_lock);
 
   apply_switcher_options(options, pool);
-
-/*
-  //reset devices
-  opt_devs_enabled = 0;
-  for (i = 0; i < MAX_DEVICES; i++)
-      devices_enabled[i] = false;
-
-  //assign pool devices if any
-  if(!empty_string((opt = get_pool_setting(pool->devices, ((!empty_string(default_profile.devices))?default_profile.devices:"all"))))) {
-    set_devices((char *)opt);
-  }
-
-  //lookup gap
-  if(!empty_string((opt = get_pool_setting(pool->lookup_gap, default_profile.lookup_gap))))
-    set_lookup_gap((char *)opt);
-
-  //set intensity
-  if(!empty_string((opt = get_pool_setting(pool->rawintensity, default_profile.rawintensity)))) {
-      set_rawintensity((char *)opt);
-  }
-  else if(!empty_string((opt = get_pool_setting(pool->xintensity, default_profile.xintensity)))) {
-    set_xintensity((char *)opt);
-  }
-  else if(!empty_string((opt = get_pool_setting(pool->intensity, ((!empty_string(default_profile.intensity))?default_profile.intensity:"8"))))) {
-    set_intensity((char *)opt);
-  }
-
-  //shaders
-  if(!empty_string((opt = get_pool_setting(pool->shaders, default_profile.shaders))))
-    set_shaders((char *)opt);
-
-  //thread-concurrency
-  // neoscrypt - if not specified set TC to 0 so that TC will be calculated by intensity settings
-  if (pool->algorithm.type == ALGO_NEOSCRYPT) {
-    opt = ((empty_string(pool->thread_concurrency))?"0":get_pool_setting(pool->thread_concurrency, default_profile.thread_concurrency));
-  }
-  // otherwise use pool/profile setting or default to default profile setting
-  else {
-    opt = get_pool_setting(pool->thread_concurrency, default_profile.thread_concurrency);
-  }
-
-  if (!empty_string(opt)) {
-    set_thread_concurrency(opt);
-  }
-
-  //worksize
-  if(!empty_string((opt = get_pool_setting(pool->worksize, default_profile.worksize))))
-    set_worksize(opt);
-*/
+  
   //manually apply algorithm
   for (i = 0; i < nDevs; i++)
   {
     applog(LOG_DEBUG, "Set GPU %d to %s", i, isnull(pool->algorithm.name, ""));
     gpus[i].algorithm = pool->algorithm;
   }
-/*
-  #ifdef HAVE_ADL
-    options = APPLY_ENGINE | APPLY_MEMCLOCK | APPLY_FANSPEED | APPLY_POWERTUNE | APPLY_VDDC;
-
-    //GPU clock
-    if(!empty_string((opt = get_pool_setting(pool->gpu_engine, default_profile.gpu_engine))))
-      set_gpu_engine((char *)opt);
-    else
-      options ^= APPLY_ENGINE;
-
-    //GPU memory clock
-    if(!empty_string((opt = get_pool_setting(pool->gpu_memclock, default_profile.gpu_memclock))))
-      set_gpu_memclock((char *)opt);
-    else
-      options ^= APPLY_MEMCLOCK;
-
-    //GPU fans
-    if(!empty_string((opt = get_pool_setting(pool->gpu_fan, default_profile.gpu_fan))))
-      set_gpu_fan((char *)opt);
-    else
-      options ^= APPLY_FANSPEED;
-
-    //GPU powertune
-    if(!empty_string((opt = get_pool_setting(pool->gpu_powertune, default_profile.gpu_powertune))))
-      set_gpu_powertune((char *)opt);
-    else
-      options ^= APPLY_POWERTUNE;
-
-    //GPU vddc
-    if(!empty_string((opt = get_pool_setting(pool->gpu_vddc, default_profile.gpu_vddc))))
-      set_gpu_vddc((char *)opt);
-    else
-      options ^= APPLY_VDDC;
-
-    //apply gpu settings
-    for (i = 0; i < nDevs; i++)
-    {
-      if(opt_isset(options, APPLY_ENGINE))
-        set_engineclock(i, gpus[i].min_engine);
-      if(opt_isset(options, APPLY_MEMCLOCK))
-        set_memoryclock(i, gpus[i].gpu_memclock);
-      if(opt_isset(options, APPLY_FANSPEED))
-        set_fanspeed(i, gpus[i].min_fan);
-      if(opt_isset(options, APPLY_POWERTUNE))
-        set_powertune(i, gpus[i].gpu_powertune);
-      if(opt_isset(options, APPLY_VDDC))
-        set_vddc(i, gpus[i].gpu_vddc);
-    }
-  #endif*/
 
   rd_unlock(&mining_thr_lock);
 
@@ -7522,6 +7457,7 @@ struct work *get_work(struct thr_info *thr, const int thr_id)
   applog(LOG_DEBUG, "[THR%d] Got work from get queue", thr_id);
 
   work->thr_id = thr_id;
+  work->thr = thr;
   thread_reportin(thr);
   work->mined = true;
   work->device_diff = MIN(thr->cgpu->drv->max_diff, work->work_difficulty);
@@ -8644,7 +8580,7 @@ static void *test_pool_thread(void *arg)
 
     cg_wlock(&control_lock);
     if (!pools_active) {
-      currentpool = pool;
+      set_current_pool(pool);
       if (pool->pool_no != 0)
         first_pool = true;
       pools_active = true;
@@ -9027,6 +8963,9 @@ bool add_cgpu(struct cgpu_info *cgpu)
   devices[total_devices++] = cgpu;
   wr_unlock(&devices_lock);
 
+  cgpu->eth_dag.current_epoch = 0xffffffffU;
+  cglock_init(&cgpu->eth_dag.lock);
+
   adjust_mostdevs();
   return true;
 }
@@ -9225,9 +9164,6 @@ int main(int argc, char *argv[])
     initial_args[i] = (const char *)strdup(argv[i]);
   initial_args[argc] = NULL;
 
-  EthCache[0] = EthCache[1] = NULL;
-  cglock_init(&EthCacheLock[0]);
-  cglock_init(&EthCacheLock[1]);
   mutex_init(&eth_nonce_lock);
 #ifdef WIN32
   rand_s(&eth_nonce);
@@ -9494,7 +9430,7 @@ int main(int argc, char *argv[])
     }
   }
   /* Set the currentpool to pool 0 */
-  currentpool = pools[0];
+  set_current_pool(pools[0]);
 
 #ifdef HAVE_SYSLOG_H
   if (use_syslog)

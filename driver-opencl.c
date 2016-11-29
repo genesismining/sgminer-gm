@@ -1469,9 +1469,12 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
   
   status = thrdata->queue_kernel_parameters(clState, &work->blk, globalThreads[0]);
   if (unlikely(status != CL_SUCCESS)) {
+    if (status > 0)
+      return 0;
     applog(LOG_ERR, "Error: clSetKernelArg of all params failed.");
     return -1;
   }
+  // if (algorithm.type == ALGO_ETHASH) read lock gpu->eth_dag.lock has to be released
 
   if (clState->goffset)
     p_global_work_offset = (size_t *)&work->blk.nonce;
@@ -1479,6 +1482,8 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
   status = clEnqueueNDRangeKernel(clState->commandQueue, clState->kernel, 1, p_global_work_offset,
     globalThreads, localThreads, 0, NULL, NULL);
   if (unlikely(status != CL_SUCCESS)) {
+    if (work->pool->algorithm.type == ALGO_ETHASH)
+      cg_runlock(&gpu->eth_dag.lock);
     applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)", status);
     return -1;
   }
@@ -1495,6 +1500,8 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
   status = clEnqueueReadBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
     buffersize, thrdata->res, 0, NULL, NULL);
   if (unlikely(status != CL_SUCCESS)) {
+    if (work->pool->algorithm.type == ALGO_ETHASH)
+      cg_runlock(&gpu->eth_dag.lock);
     applog(LOG_ERR, "Error: clEnqueueReadBuffer failed error %d. (clEnqueueReadBuffer)", status);
     return -1;
   }
@@ -1506,6 +1513,8 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 
   /* This finish flushes the readbuffer set with CL_FALSE in clEnqueueReadBuffer */
   clFinish(clState->commandQueue);
+  if (work->pool->algorithm.type == ALGO_ETHASH)
+    cg_runlock(&gpu->eth_dag.lock);
 
   /* found entry is used as a counter to say how many nonces exist */
   if (thrdata->res[found]) {

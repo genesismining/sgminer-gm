@@ -527,8 +527,7 @@ struct sgminer_pool_stats {
   uint64_t net_bytes_received;
 };
 
-typedef struct _gpu_sysfs_info
-{
+typedef struct _gpu_sysfs_info {
   char *HWMonPath;
   uint32_t MinFanSpeed;
   uint32_t MaxFanSpeed;
@@ -538,6 +537,24 @@ typedef struct _gpu_sysfs_info
   float LastFanSpeed;
   float LastTemp;
 } gpu_sysfs_info;
+
+struct _eth_dag_t;
+typedef struct _eth_cache_t {
+  uint8_t seed_hash[32];
+  uint8_t *dag_cache;
+  struct _eth_dag_t **dags;
+  uint32_t current_epoch;
+  uint32_t nDevs;
+  bool disabled;
+} eth_cache_t;
+
+typedef struct _eth_dag_t {
+  cglock_t lock;
+  cl_mem dag_buffer;
+  struct pool *pool;
+  uint32_t current_epoch;
+  uint32_t max_epoch;
+} eth_dag_t;
 
 struct cgpu_info {
   int sgminer_id;
@@ -625,6 +642,7 @@ struct cgpu_info {
   int dev_throttle_count;
 
   struct sgminer_stats sgminer_stats;
+  eth_dag_t eth_dag;
 
   bool shutdown;
 
@@ -851,6 +869,7 @@ extern void api_initlock(void *lock, enum cglock_typ typ, const char *file, cons
 #define cglock_init(_lock) _cglock_init(_lock, __FILE__, __func__, __LINE__)
 #define cg_rlock(_lock) _cg_rlock(_lock, __FILE__, __func__, __LINE__)
 #define cg_ilock(_lock) _cg_ilock(_lock, __FILE__, __func__, __LINE__)
+#define cg_iunlock(_lock) _cg_iunlock(_lock, __FILE__, __func__, __LINE__)
 #define cg_ulock(_lock) _cg_ulock(_lock, __FILE__, __func__, __LINE__)
 #define cg_wlock(_lock) _cg_wlock(_lock, __FILE__, __func__, __LINE__)
 #define cg_dwlock(_lock) _cg_dwlock(_lock, __FILE__, __func__, __LINE__)
@@ -993,6 +1012,12 @@ static inline void _cg_rlock(cglock_t *lock, const char *file, const char *func,
 static inline void _cg_ilock(cglock_t *lock, const char *file, const char *func, const int line)
 {
   _mutex_lock(&lock->mutex, file, func, line);
+}
+
+/* Unlock intermediate lock - behaves like a mutex. */
+static inline void _cg_iunlock(cglock_t *lock, const char *file, const char *func, const int line)
+{
+  _mutex_unlock_noyield(&lock->mutex, file, func, line);
 }
 
 /* Upgrade intermediate variant to a write lock */
@@ -1318,8 +1343,7 @@ struct pool {
   int quota_gcd;
   int quota_used;
   int works;
-  uint8_t SeedHash[32];
-  uint32_t EpochNumber;
+  eth_cache_t eth_cache;
   uint8_t Target[32];
   uint8_t EthWork[32];
   uint8_t NetDiff[32];
@@ -1468,7 +1492,6 @@ struct work {
   unsigned char data[168];
   unsigned char midstate[32];
   unsigned char target[32];
-  unsigned char seedhash[32];
   unsigned char hash[32];
   unsigned char mixhash[32];
 
@@ -1477,7 +1500,7 @@ struct work {
   double    share_diff;
   double	network_diff;
 
-  uint32_t EpochNumber;
+  uint32_t eth_epoch;
   uint64_t Nonce;
 
   unsigned char equihash_data[1487];

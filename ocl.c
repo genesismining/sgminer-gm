@@ -813,10 +813,6 @@ out:
       return NULL;
     }
   
-    // Load kernels
-    applog(LOG_NOTICE, "Initialising kernel %s with params N=%d, K=%d",
-      filename, algorithm->nfactor, algorithm->kfactor);
-    
     clState->n_extra_kernels = algorithm->n_extra_kernels;
     if (clState->n_extra_kernels > 0) {
       unsigned int i;
@@ -836,22 +832,30 @@ out:
   }
     
 
-  if(algorithm->type == ALGO_ETHASH)
-  {
-	  clState->GenerateDAG = clCreateKernel(clState->program, "GenerateDAG", &status);
+  if (algorithm->type == ALGO_ETHASH) {
+    clState->GenerateDAG = clCreateKernel(clState->program, "GenerateDAG", &status);
 
-	  if(status != CL_SUCCESS)
-	  {
-		  applog(LOG_ERR, "Error %d while creating DAG generation kernel.", status);
-		  return(NULL);
-	  }
+    if (status != CL_SUCCESS) {
+      applog(LOG_ERR, "Error %d while creating DAG generation kernel.", status);
+      return NULL;
+    }
   }
 
   size_t bufsize;
   size_t buf1size;
   size_t buf3size;
   size_t buf2size;
-  size_t readbufsize = (algorithm->type == ALGO_CRE) ? 168 : 128;
+  size_t readbufsize;
+  switch (algorithm->type) {
+    case ALGO_CRE:
+      readbufsize = 168;
+      break;
+    case ALGO_ETHASH:
+      readbufsize = 32;
+      break;
+    default:
+      readbufsize = 128;
+  }
 
   if (algorithm->rw_buffer_size < 0) {
     // calc buffer size for neoscrypt
@@ -974,11 +978,6 @@ out:
     }
   }
 
-	if(algorithm->type == ALGO_ETHASH)
-	{
-		readbufsize = 32UL;
-		clState->DAG = clState->EthCache = NULL;
-	}
   applog(LOG_DEBUG, "Using read buffer sized %lu", (unsigned long)readbufsize);
   clState->CLbuffer0 = clCreateBuffer(clState->context, CL_MEM_READ_ONLY, readbufsize, NULL, &status);
   if (status != CL_SUCCESS) {
@@ -988,8 +987,9 @@ out:
 
   clState->devid = cgpu->device_id;
 
-  applog(LOG_DEBUG, "Using output buffer sized %lu", BUFFERSIZE);
-  clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_WRITE_ONLY, BUFFERSIZE, NULL, &status);
+  size_t buffersize = MAX(sizeof(sols_t), BUFFERSIZE);
+  applog(LOG_DEBUG, "Using output buffer sized %lu", buffersize);
+  clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_WRITE_ONLY, buffersize, NULL, &status);
   if (status != CL_SUCCESS) {
     applog(LOG_ERR, "Error %d: clCreateBuffer (outputBuffer)", status);
     return NULL;

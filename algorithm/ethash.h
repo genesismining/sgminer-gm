@@ -2,6 +2,8 @@
 #define __ETHASH_H
 
 #include <stdint.h>
+#include "miner.h"
+
 
 static const uint64_t dag_sizes[2048] =
 {
@@ -752,7 +754,7 @@ static const uint64_t cache_sizes[2048] =
 #define EthGetDAGSize(EpochNum)		dag_sizes[EpochNum]
 
 struct work;
-void EthGenerateCache(void *cache_nodes_in, const uint8_t *seedhash, uint64_t cache_size);
+void eth_gen_cache(struct pool *);
 void ethash_regenhash(struct work *work);
 uint32_t EthCalcEpochNumber(uint8_t *SeedHash);
 

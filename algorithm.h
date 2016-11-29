@@ -61,7 +61,6 @@ typedef struct _algorithm_t {
   const char *kernelfile; /* alternate kernel file */
   uint32_t n;        /* N (CPU/Memory tradeoff parameter) */
   uint8_t  nfactor;  /* Factor of N above (n = 2^nfactor) */
-  uint8_t  kfactor;  /* Factor of N above (n = 2^nfactor) */
   double   diff_multiplier1;
   double   diff_multiplier2;
   double   share_diff_multiplier;

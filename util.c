@@ -1820,7 +1820,7 @@ out:
 }
 
 
-bool parse_diff_ethash(char* Target, char* TgtStr)
+bool parse_diff_ethash(char* Target, const char* TgtStr)
 {
   bool ret = false;
   int len = strlen(TgtStr);
@@ -1893,10 +1893,11 @@ static bool parse_notify_ethash(struct pool *pool, json_t *val)
     free(pool->swork.job_id);
   pool->swork.job_id = strdup(job_id);
   pool->swork.clean = clean;
-  
-  if (memcmp(pool->SeedHash, SeedHash, 32)) {
-    pool->EpochNumber = EthCalcEpochNumber(SeedHash);
-    memcpy(pool->SeedHash, SeedHash, 32);
+ 
+  if (memcmp(pool->eth_cache.seed_hash, SeedHash, 32)) {
+    pool->eth_cache.current_epoch = EthCalcEpochNumber(SeedHash);
+    memcpy(pool->eth_cache.seed_hash, SeedHash, 32);
+    eth_gen_cache(pool);
   }
   memcpy(pool->EthWork, EthWork, 32);
   
@@ -1910,6 +1911,7 @@ static bool parse_notify_ethash(struct pool *pool, json_t *val)
     pool->diff1 = eth2pow256 / le256todouble(pool->NetDiff);
   }
   pool->getwork_requested++;
+  //pool->eth_cache.disabled = false;
   
   cg_wunlock(&pool->data_lock);
 
