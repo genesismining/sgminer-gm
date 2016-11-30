@@ -962,7 +962,7 @@ extern uint32_t eth_nonce;
 static const int eth_future_epochs = 6;
 static cl_int queue_ethash_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_unused cl_uint threads)
 {
-  struct pool *pool = blk->work->pool, *currentpool;
+  struct pool *pool = blk->work->pool;
   eth_dag_t *dag;
   cl_kernel *kernel;
   unsigned int num = 0;
@@ -970,21 +970,14 @@ static cl_int queue_ethash_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_u
   cl_ulong le_target;
   cl_uint HighNonce, Isolate = UINT32_MAX;
 
-  struct thr_info *thr = blk->work->thr;
-  if (pool == NULL || thr == NULL || thr->cgpu == NULL)
-    goto out;
   cg_ilock(&pool->data_lock);
-  if (pool->eth_cache.disabled || pool->eth_cache.dag_cache == NULL || pool->algorithm.type != ALGO_ETHASH || blk->work->eth_epoch == UINT32_MAX) {
-    currentpool = current_pool();
-    if (currentpool != NULL && currentpool->algorithm.type == ALGO_ETHASH)
-      blk->work->pool = currentpool;
+  if (pool->eth_cache.disabled || pool->eth_cache.dag_cache == NULL) {
     cg_iunlock(&pool->data_lock);
-out:
     cgsleep_ms(200);
     applog(LOG_DEBUG, "THR[%d]: stop ETHASH mining", blk->work->thr_id);
     return 1;
   }
-  dag = &thr->cgpu->eth_dag;
+  dag = &blk->work->thr->cgpu->eth_dag;
   cg_ilock(&dag->lock);
   if (dag->current_epoch != blk->work->eth_epoch) {
     cl_ulong CacheSize = EthGetCacheSize(blk->work->eth_epoch);
@@ -1235,6 +1228,7 @@ static algorithm_settings_t algos[] = {
   { "vanilla",     ALGO_VANILLA,   "", 1, 1, 1, 0, 0, 0xFF, 0xFFFFULL, 0x000000ffUL, 0, 128, 0, blakecoin_regenhash, precalc_hash_blakecoin, queue_blake_kernel, gen_hash, NULL },
 
   { "ethash",     ALGO_ETHASH,   "", (1ULL << 32), (1ULL << 32), 1, 0, 0, 0xFF, 0xFFFF000000000000ULL, 0x00000000UL, 0, 128, 0, ethash_regenhash, NULL, queue_ethash_kernel, gen_hash, append_ethash_compiler_options },
+  { "ethash-genoil",     ALGO_ETHASH,   "", (1ULL << 32), (1ULL << 32), 1, 0, 0, 0xFF, 0xFFFF000000000000ULL, 0x00000000UL, 0, 128, 0, ethash_regenhash, NULL, queue_ethash_kernel, gen_hash, append_ethash_compiler_options },
 
   { "equihash",     ALGO_EQUIHASH,   "", 1, (1ULL << 28), (1ULL << 28), 0, 0, 0x20000, 0xFFFF000000000000ULL, 0x00000000UL, 0, 128, 0, equihash_regenhash, NULL, queue_equihash_kernel, gen_hash, append_equihash_compiler_options },
 
