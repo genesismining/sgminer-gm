@@ -351,6 +351,7 @@ static void set_current_pool(struct pool *pool) {
   if (free_dag) {
     cg_wlock(&currentpool->data_lock);
     eth_cache_t *cache = &currentpool->eth_cache;
+    cache->disabled = true;
     for (int i = 0; i < cache->nDevs; i++) {
       cg_wlock(&cache->dags[i]->lock);
       if (cache->dags[i]->dag_buffer != NULL)
@@ -364,7 +365,6 @@ static void set_current_pool(struct pool *pool) {
     free(cache->dags);
     cache->dags = NULL;
     cache->nDevs = 0;
-    cache->disabled = true;
     cg_wunlock(&currentpool->data_lock);
   }
   currentpool = pool;
@@ -2150,7 +2150,7 @@ static double get_work_blockdiff(const struct work *work)
     numerator = (double)work->pool->algorithm.diff_numerator;
   }
   if (work->pool->algorithm.type == ALGO_ETHASH) {
-    return work->network_diff;
+    return 0;//work->network_diff;
   }
   else {
     uint8_t pow = work->data[72];
