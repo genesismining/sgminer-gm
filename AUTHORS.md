@@ -1,68 +1,108 @@
-# Authors
+SGMiner-GM is the collaborative result of so many talented people. Here, you can find a list of authors (current and past).
 
-## Core
+## Current Developers
+###### These are the people who are currently working on SGMiner-GM!
 
-* Jan Berdajs <mrbrdo at mrbrdo dot net> 15bULC8snaKAMeFb3xBmmhbWj1xyTmBUfm
-* Noel Maersk <veox at wemakethings dot net> 12jF1VExtmmMu8D36vo4Y4CYqLK5yCtLC4
-* troky <troky2001 at yahoo dot com> 1DqHeJdVy4kQX1jHaaVxef9Bgii14pwEbg
-* Yann St.Arnaud <ystarnaud at gmail dot com> 1SLixz2vRvjdpzZTep4Tiqs82Jc28tc6J
-* lasybear <**FIXME**>
-* Luke Dashjr <luke-jr+cgminer @at@ utopios .dot. org> 1QATWksNFGeUJCWBrN4g6hGM178Lovm7Wh
-* Andrew Smith <kan0i {at} kano-kun [dot] net> 1Jjk2LmktEQKnv8r2cZ9MvLiZwZ9gxabKm
++ [Wolf](https://github.com/wolf9466/)
++ [Kristy-Leigh Minehan](https://github.com/OhGodAGirl)
++ [Philipp Otterbein](https://github.com/NaN-git) 
 
+## SGMiner Developers
+###### SGMiner-GM wouldn't be possible in it's current iteration without the hard work of previous developers of sgminer, including:
 
-## Core (history)
++ [Yann St. Arnaud](https://github.com/ystarnaud)
++ [Jan Berdajs](https://github.com/mrbrdo)
++ [Noel Maersk](https://github.com/veox)
++ [Troky](https://github.com/troky)
++ [Lasybear](https://github.com/lasybear)
++ [Luke-Jr](https://github.com/luke-jr)
++ [Andrew Smith](https://github.com/kanoi)
++ [Con Kolivas](https://github.com/ckolivas)
++ [Martin Danielsen](https://github.com/Kalroth)
 
-* Con Kolivas <kernel [at] kolivas {dot} org> 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
-* Martin Danielsen <kalroth {at} gmail _dot_ com> 1DNBcSEENBwDKrcTyTW61ezWhzsPy5imkn
+##Bug Fixes, Testing, and Improvements
+###### These folks have helped SGMiner development through squashing bugs, optimizing code or just generally testing for stability.
 
-
-## Cross-platform support
-
-* MinGW (Windows native): Drogean <Drogean>
-* MinGW (Linux cross-compilation): Wolf` <wolf9466>
-* MinGW (Linux cross-compilation): tonobitc <tonobitc>
-* MSVS2010: troky <troky2001 at yahoo dot com>
-* Cygwin: Markus Peloquin <markuspeloquin>
-
-
-## OpenCL kernels
-
-**FIXME**: this section is outdated.
-
-All current kernels are based on `scrypt`, originally by Colin Percival,
-updated by many others.
-
-* alexkarnew/alexkarold: Alexey Karimov LMqRcHdwnZtTMH6c2kWoxSoKM5KySfaP5C
-* bufius: Bufius VvvmmkYHKGtdr97JLyyZuJ3Th5ayungnjk
-* ckolivas: Con Kolivas <kernel @at@ kolivas }dot{ org> 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
-* psw: Pavel Semjanov LP6GRFvgoMxKA6AW4TVF668cNezEGZvEtr
-* zuikkis: Zuikkis LeXck7EYgxyjw13zNDxZFmmgmWffFvhmSh
-
-
-## Testing, bug fixes, improvements
-
-* Michael Fiano <mfiano>
-* Gabriel Devenyi <gdevenyi>
-* Benjamin Herrenschmidt <ozbenh>
-* Joe4782 <Joe4782>
-* gacheson <gacheson>
-* Drogean <Drogean>
-* Wolf` <wolf9466>
-* tonobitc <tonobitc>
-* Perry Huang <perryh>
-* Joseph Bruggeman <jbruggeman>
-* Badman74 <badman74>
-* djm34 <djm4>
-
-...and many others. See:
-
-* [sgminer-dev/sgminer](https://github.com/sgminer-dev/sgminer/graphs/contributors)
-
-## Legacy
-
-* Original CPU mining software: Jeff Garzik <jgarzik@pobox.com>
-
-## Sponsors and acknowledgments
-
-* nicehash.com - sponsored adding/merging many additional algorithms including X11 and Keccak, stratum extranonce
++ [Michael Fiano](https://github.com/mfiano)
++ [Gabriel Deveny](https://github.com/gdevenyi)
++ [Benjamin Herrenschmidt](https://github.com/ozbenh)
++ [Joe4782](https://github.com/Joe4782)
++ [Geoff Acheson](https://github.com/gacheson)
++ [Drogean](https://github.com/Drogean)
++ [Tonobitc](https://github.com/tonobitc)
++ [Perry Huang](https://github.com/perryh)
++ [Joe Bruggeman](https://github.com/jbruggeman)
++ [djm34](https://github.com/djm34)
++ [Badman74](https://github.com/badman74)
++ [Paul Sheppard](https://github.com/pshep)
++ [nelisky](https://github.com/nelisky)
++ [denis2342](https://github.com/denis2342)
++ [aznboy84](https://github.com/aznboy84)
++ [prettyhatemachine](https://github.com/prettyhatemachine)
++ [Xiangfu Liu](https://github.com/xiangfu)
++ [Michael Kedzierski](https://github.com/ycros)
++ [Andras Elso](https://github.com/Elbandi)
++ [Chris Chua](https://github.com/someone42)
++ [Rusty Russell](https://github.com/rustyrussell)
++ [Setkeh](https://github.com/setkeh)
++ [bllacky](https://github.com/Bllacky)
++ [bitbandi](https://github.com/bitbandi)
++ [Vitalii Demianets](https://github.com/dvitas)
++ [Anatoly Manzhugin](https://github.com/tupieurods)
++ [James Gao](https://github.com/gzm55)
++ [sterlingpickens](https://github.com/sterlingpickens)
++ [Nick Bushor](https://github.com/nushor)
++ [pheonix48](https://github.com/Phoenix48)
++ [Bufius](https://github.com/Bufius)
++ [Diogo Franco](https://github.com/Kovensky)
++ [roybadami](https://github.com/roybadami)
++ [Scott Dial](https://github.com/geekmug)
++ [Maksym](https://github.com/mborodin)
++ [platinum4](https://github.com/platinum4)
++ [Henrik Nordström](https://github.com/hno)
++ [Markus Peloquin](https://github.com/markuspeloquin)
++ [Angus Gratton](https://github.com/projectgus)
++ [Chris](https://github.com/chrissicool)
++ [Harry Moreno](https://github.com/morenoh149)
++ [Zuikkis](https://github.com/Zuikkis)
++ [Jesse Moll](https://github.com/JesseMoll)
++ [Scott Jann](https://github.com/zenwheel)
++ [Zefir Kurtisi](https://github.com/zefir-k)
++ [Mark Crichton](https://github.com/chromicant)
++ [sentricorp](https://github.com/sentricorp)
++ [Glenn Murray](https://github.com/cradle)
++ [Irving A. Bermúdez S](https://github.com/bigchirv)
++ [Ori](https://github.com/Oriumpor)
++ [deba12](https://github.com/deba12)
++ [Thomas](https://github.com/honeymaker)
++ [Gabriel A. Devenyi](https://github.com/gdevenyi)
++ [Jim Jagielski](https://github.com/jimjag)
++ [Giovanni Toraldo](https://github.com/gionn)
++ [Spencer Shimko](https://github.com/sshimko)
++ [Tim Bateman](https://github.com/farproc)
++ [Mark Scrano](https://github.com/SkillfulHacking)
++ [Olivier Langlois](https://github.com/lano1106)
++ [Michael Bemmerl](https://github.com/mibe)
++ [Mike Hrencecin](https://github.com/mhren)
++ [hocuscapocus](https://github.com/hocuscapocus)
++ [CyberLeo](https://github.com/CyberLeo)
++ [sharky112065](https://github.com/sharky112065)
++ [EskimoBob](https://github.com/EskimoBob)
++ [Brandon Tuomela](https://github.com/wbtuomela)
++ [Blagodarenko](https://github.com/Blagodarenko)
++ [Tydus](https://github.com/Tydus)
++ [Phraust](https://github.com/Phraust)
++ [Sergei Krivonos](https://github.com/iHateInventNames)
++ [Timothy Redaelli](https://github.com/drizzt)
++ [David Dean](https://github.com/davedean)
++ [Monson Shao](https://github.com/holymonson)
++ [p2k](https://github.com/p2k)
++ [Midnight Magic](https://github.com/midnightmagic)
++ [Forrest Voight](https://github.com/forrestv)
++ [Nate Woolls](https://github.com/nwoolls)
++ [Marco Fontani](https://github.com/mfontani)
++ [Tom Rini](https://github.com/trini)
++ [Raulo](https://github.com/Raulo)
++ [Jeff Garzik](https://github.com/jgarzik)
++ [Alexey Karimov](https://github.com/akarimov)
++ [Andreas Oeldenberger](https://github.com/anoelden)
