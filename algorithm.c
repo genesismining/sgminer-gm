@@ -962,28 +962,30 @@ extern uint32_t eth_nonce;
 static const int eth_future_epochs = 6;
 static cl_int queue_ethash_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_unused cl_uint threads)
 {
-  struct pool *pool = blk->work->pool;
+  struct pool *pool = blk->work->pool, *currentpool;
+  eth_dag_t *dag;
   cl_kernel *kernel;
   unsigned int num = 0;
   cl_int status = 0;
   cl_ulong le_target;
   cl_uint HighNonce, Isolate = UINT32_MAX;
 
-  eth_dag_t *dag = &blk->work->thr->cgpu->eth_dag;
-  cg_ilock(&dag->lock);
-  if (pool != NULL)
-    cg_ilock(&pool->data_lock);
-  if (pool == NULL || pool->eth_cache.disabled || pool->eth_cache.dag_cache == NULL || pool->algorithm.type != ALGO_ETHASH || blk->work->eth_epoch == UINT32_MAX) {
-    struct pool *currentpool = current_pool();
+  struct thr_info *thr = blk->work->thr;
+  if (pool == NULL || thr == NULL || thr->cgpu == NULL)
+    goto out;
+  cg_ilock(&pool->data_lock);
+  if (pool->eth_cache.disabled || pool->eth_cache.dag_cache == NULL || pool->algorithm.type != ALGO_ETHASH || blk->work->eth_epoch == UINT32_MAX) {
+    currentpool = current_pool();
     if (currentpool != NULL && currentpool->algorithm.type == ALGO_ETHASH)
       blk->work->pool = currentpool;
-    if (pool != NULL)
-      cg_iunlock(&pool->data_lock);
-    cg_iunlock(&dag->lock);
+    cg_iunlock(&pool->data_lock);
+out:
     cgsleep_ms(200);
     applog(LOG_DEBUG, "THR[%d]: stop ETHASH mining", blk->work->thr_id);
     return 1;
   }
+  dag = &thr->cgpu->eth_dag;
+  cg_ilock(&dag->lock);
   if (dag->current_epoch != blk->work->eth_epoch) {
     cl_ulong CacheSize = EthGetCacheSize(blk->work->eth_epoch);
     cg_ulock(&dag->lock);
