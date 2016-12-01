@@ -492,12 +492,12 @@ char *set_temp_overheat(char *arg)
       return "Invalid value passed to set temp overheat";
 
     gpus[device].adl.overtemp = val;
-  gpus[device++].sysfs_info.OverHeatTemp = val;
+    gpus[device++].sysfs_info.OverHeatTemp = val;
   }
   if (device == 1) {
     for (i = device; i < MAX_GPUDEVICES; i++) {
       gpus[i].adl.overtemp = val;
-  gpus[i].sysfs_info.OverHeatTemp = val;
+      gpus[i].sysfs_info.OverHeatTemp = val;
     }
   }
 
@@ -529,15 +529,14 @@ char *set_temp_target(char *arg)
     tt = &gpus[device].adl.targettemp;
     *tt = val;
     tt = &gpus[device++].sysfs_info.TargetTemp;
-  *tt = val;
-    
+    *tt = val;    
   }
   if (device == 1) {
     for (i = device; i < MAX_GPUDEVICES; i++) {
       tt = &gpus[i].adl.targettemp;
       *tt = val;
       tt = &gpus[i].sysfs_info.TargetTemp;
-    *tt = val;
+      *tt = val;
     }
   }
 
@@ -1455,7 +1454,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
       // increase nonce
       work->blk.nonce++;
       if (work->getwork_mode == GETWORK_MODE_STRATUM)
-  *(uint16_t*)(work->equihash_data + 108 + strlen(work->nonce1) / 2) += 1;
+        *(uint16_t*)(work->equihash_data + 108 + strlen(work->nonce1) / 2) += 1;
       else {
         *(uint64_t*)(work->equihash_data + 108) += 1;
         
@@ -1639,12 +1638,12 @@ static void opencl_thread_shutdown(struct thr_info *thr)
     clFinish(clState->commandQueue);
     clReleaseMemObject(clState->outputBuffer);
     clReleaseMemObject(clState->CLbuffer0);
-  if (clState->buffer1)
-  clReleaseMemObject(clState->buffer1);
-  if (clState->buffer2)
-  clReleaseMemObject(clState->buffer2);
-  if (clState->buffer3)
-  clReleaseMemObject(clState->buffer3);
+    if (clState->buffer1)
+      clReleaseMemObject(clState->buffer1);
+    if (clState->buffer2)
+      clReleaseMemObject(clState->buffer2);
+    if (clState->buffer3)
+      clReleaseMemObject(clState->buffer3);
     if (clState->padbuffer8)
       clReleaseMemObject(clState->padbuffer8);
     clReleaseKernel(clState->kernel);
