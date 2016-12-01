@@ -41,6 +41,7 @@
 #include "algorithm/blake256.h"
 #include "algorithm/blakecoin.h"
 #include "algorithm/ethash.h"
+#include "algorithm/cryptonight.h"
 #include "algorithm/equihash.h"
 
 #include "compat.h"
@@ -75,6 +76,7 @@ const char *algorithm_type_str[] = {
   "Blake",
   "Vanilla",
   "Ethash",
+  "Cryptonight",
   "Equihash"
 };
 
@@ -1084,6 +1086,67 @@ static void append_equihash_compiler_options(struct _build_kernel_data *data, st
   strcat(data->compiler_options, "");
 }
 
+static cl_int queue_cryptonight_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_unused cl_uint threads)
+{
+	cl_kernel *kernel = &clState->kernel;
+	unsigned int num = 0;
+	cl_int status = 0, tgt32 = (blk->work->XMRTarget);
+	cl_ulong le_target = ((cl_ulong)(blk->work->XMRTarget));
+
+	//le_target = *(cl_ulong *)(blk->work->device_target + 24);
+	memcpy(clState->cldata, blk->work->data, 76);
+		
+	status = clEnqueueWriteBuffer(clState->commandQueue, clState->CLbuffer0, true, 0, 76, clState->cldata , 0, NULL, NULL);
+	
+	CL_SET_ARG(clState->CLbuffer0);
+	CL_SET_ARG(clState->Scratchpads);
+	CL_SET_ARG(clState->States);
+	
+	num = 0;
+	kernel = clState->extra_kernels;
+	CL_SET_ARG(clState->Scratchpads);
+	CL_SET_ARG(clState->States);
+	
+	num = 0;
+	CL_NEXTKERNEL_SET_ARG(clState->Scratchpads);
+	CL_SET_ARG(clState->States);
+	CL_SET_ARG(clState->BranchBuffer[0]);
+	CL_SET_ARG(clState->BranchBuffer[1]);
+	CL_SET_ARG(clState->BranchBuffer[2]);
+	CL_SET_ARG(clState->BranchBuffer[3]);
+	
+	num = 0;
+	CL_NEXTKERNEL_SET_ARG(clState->States);
+	CL_SET_ARG(clState->BranchBuffer[0]);
+	CL_SET_ARG(clState->outputBuffer);
+	CL_SET_ARG(tgt32);
+	
+	// last to be set in driver-opencl.c
+	
+	num = 0;
+	CL_NEXTKERNEL_SET_ARG(clState->States);
+	CL_SET_ARG(clState->BranchBuffer[1]);
+	CL_SET_ARG(clState->outputBuffer);
+	CL_SET_ARG(tgt32);
+	
+	
+	num = 0;
+	CL_NEXTKERNEL_SET_ARG(clState->States);
+	CL_SET_ARG(clState->BranchBuffer[2]);
+	CL_SET_ARG(clState->outputBuffer);
+	CL_SET_ARG(tgt32);
+	
+	
+	num = 0;
+	CL_NEXTKERNEL_SET_ARG(clState->States);
+	CL_SET_ARG(clState->BranchBuffer[3]);
+	CL_SET_ARG(clState->outputBuffer);
+	CL_SET_ARG(tgt32);
+	
+	return(status);
+}
+
+
 
 static cl_int queue_equihash_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_unused cl_uint threads)
 {
@@ -1231,7 +1294,9 @@ static algorithm_settings_t algos[] = {
   { "ethash-genoil",     ALGO_ETHASH,   "", (1ULL << 32), (1ULL << 32), 1, 0, 0, 0xFF, 0xFFFF000000000000ULL, 0x00000000UL, 0, 128, 0, ethash_regenhash, NULL, queue_ethash_kernel, gen_hash, append_ethash_compiler_options },
 
   { "equihash",     ALGO_EQUIHASH,   "", 1, (1ULL << 28), (1ULL << 28), 0, 0, 0x20000, 0xFFFF000000000000ULL, 0x00000000UL, 0, 128, 0, equihash_regenhash, NULL, queue_equihash_kernel, gen_hash, append_equihash_compiler_options },
-
+  
+  { "cryptonight", ALGO_CRYPTONIGHT, "", (1ULL << 32), (1ULL << 32), (1ULL << 32), 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 6, 0, 0, cryptonight_regenhash, NULL, queue_cryptonight_kernel, gen_hash, NULL },
+  
   // Terminator (do not remove)
   { NULL, ALGO_UNK, "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL }
 };

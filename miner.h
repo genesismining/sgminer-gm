@@ -1347,7 +1347,14 @@ struct pool {
   uint8_t Target[32];
   uint8_t EthWork[32];
   uint8_t NetDiff[32];
-
+  
+  //XMR stuff
+  char XMRAuthID[64];
+  uint32_t XMRTarget;
+  uint8_t XMRBlob[76];
+  pthread_mutex_t XMRGlobalNonceLock;
+  uint32_t XMRGlobalNonce;
+  
   double diff_accepted;
   double diff_rejected;
   double diff_stale;
@@ -1502,7 +1509,13 @@ struct work {
 
   uint32_t eth_epoch;
   uint64_t Nonce;
-
+  
+  /* cryptonight stuff */
+  uint32_t XMRTarget;
+  uint8_t XMRBlob[76];
+    
+  uint32_t XMRNonce;
+  
   unsigned char equihash_data[1487];
 
   int   rolls;

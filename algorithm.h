@@ -38,6 +38,7 @@ typedef enum {
   ALGO_BLAKE,
   ALGO_VANILLA,
   ALGO_ETHASH,
+  ALGO_CRYPTONIGHT,
   ALGO_EQUIHASH
 } algorithm_type_t;
 

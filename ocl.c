@@ -186,6 +186,37 @@ static cl_int create_opencl_command_queue(cl_command_queue *command_queue, cl_co
   return status;
 }
 
+// Borrowed from driver-opencl.c
+static void set_threads_hashes(unsigned int vectors, unsigned int compute_shaders, size_t *globalThreads,
+  unsigned int minthreads, __maybe_unused int *intensity, __maybe_unused int *xintensity,
+  __maybe_unused int *rawintensity, algorithm_t *algorithm)
+{
+  unsigned int threads = 0;
+  while (threads < minthreads) {
+
+    if (*rawintensity > 0) {
+      threads = *rawintensity;
+    }
+    else if (*xintensity > 0) {
+      threads = compute_shaders * ((algorithm->xintensity_shift) ? (1 << (algorithm->xintensity_shift + *xintensity)) : *xintensity);
+    }
+    else {
+      threads = 1 << (algorithm->intensity_shift + *intensity);
+    }
+
+    if (threads < minthreads) {
+      if (likely(*intensity < MAX_INTENSITY)) {
+        (*intensity)++;
+      }
+      else {
+        threads = minthreads;
+      }
+    }
+  }
+
+  *globalThreads = threads;
+}
+
 _clState *initCl(unsigned int gpu, char *name, size_t nameSize, algorithm_t *algorithm)
 {
   cl_int status = 0;
@@ -977,7 +1008,42 @@ out:
       return NULL;
     }
   }
-
+  
+	if(algorithm->type == ALGO_CRYPTONIGHT)
+	{
+		size_t GlobalThreads;
+		readbufsize = 76UL;
+		
+		set_threads_hashes(1, clState->compute_shaders, &GlobalThreads, 1, &cgpu->intensity, &cgpu->xintensity, &cgpu->rawintensity, &cgpu->algorithm);
+		
+		for(int i = 0; i < 4; ++i)
+		{
+			clState->BranchBuffer[i] = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, sizeof(cl_uint) * (GlobalThreads + 2), NULL, &status);
+			
+			if(status != CL_SUCCESS)
+			{
+				applog(LOG_ERR, "Error %d when creating branch buffer %d.\n", status, i);
+				return NULL;
+			}
+		}
+		
+		clState->States = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, 200 * GlobalThreads, NULL, &status);
+		
+		if(status != CL_SUCCESS)
+		{
+			applog(LOG_ERR, "Error %d when creating Cryptonight state buffer.\n", status);
+			return NULL;
+		}
+		
+		clState->Scratchpads = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, (1 << 21) * GlobalThreads, NULL, &status);
+		
+		if(status != CL_SUCCESS)
+		{
+			applog(LOG_ERR, "Error %d when creating Cryptonight scratchpads buffer.\n", status);
+			return NULL;
+		}
+	}
+  
   applog(LOG_DEBUG, "Using read buffer sized %lu", (unsigned long)readbufsize);
   clState->CLbuffer0 = clCreateBuffer(clState->context, CL_MEM_READ_ONLY, readbufsize, NULL, &status);
   if (status != CL_SUCCESS) {

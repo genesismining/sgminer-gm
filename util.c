@@ -1942,6 +1942,83 @@ out:
   return ret;
 }
 
+bool parse_notify_cn(struct pool *pool, json_t *val)
+{
+  char *job_id = NULL;
+  bool clean;
+  uint32_t XMRTarget;
+  uint8_t XMRBlob[76];
+  int ret = true;
+
+  /*json_t *arr = json_array_get(val, 0);
+  if (!arr || !json_is_array(arr)) {
+    applog(LOG_DEBUG, "parse_notify_ethash: Array was bad.");
+    ret = false;
+    goto out;
+  }*/
+
+  applog(LOG_DEBUG, "parse_notify_cn()");
+
+  json_t *blob, *jid, *target;
+
+  blob = json_object_get(val, "blob");
+  jid = json_object_get(val, "job_id");
+  target = json_object_get(val, "target");
+
+  if(!blob || !jid || !target)
+  {
+    applog(LOG_DEBUG, "parse_notify_cn: bad params.");
+    ret = false;
+    goto out;
+  }
+
+  const char *blobval = json_string_value(blob);
+  if (!hex2bin(XMRBlob, blobval, 76)) {
+    ret = false;
+    goto out;
+  }
+  
+  job_id = json_string_value(jid);
+  XMRTarget = bswap_32(strtoul(json_string_value(target), NULL, 16));
+
+  cg_wlock(&pool->data_lock);
+  
+  if (pool->swork.job_id != NULL) {
+    free(pool->swork.job_id);
+  }
+  
+  pool->swork.job_id = strdup(job_id);
+  pool->swork.clean = true;
+  
+  memcpy(pool->XMRBlob, XMRBlob, 76);
+  pool->XMRTarget = XMRTarget;
+  pool->swork.diff = (double)0xffffffff / XMRTarget;
+  pool->getwork_requested++;
+  
+  cg_wunlock(&pool->data_lock);
+  
+  mutex_lock(&pool->XMRGlobalNonceLock);
+  pool->XMRGlobalNonce = 0;
+  mutex_unlock(&pool->XMRGlobalNonceLock);
+
+  if (opt_protocol) {
+    applog(LOG_DEBUG, "job_id: %s", job_id);
+    applog(LOG_DEBUG, "Blob: %s", blobval);
+    applog(LOG_DEBUG, "Target: %08x", XMRTarget);
+    applog(LOG_DEBUG, "Share diff: %.2f", pool->swork.diff);
+  }
+
+  /* A notify message is the closest stratum gets to a getwork */
+  total_getworks++;
+  if (pool == current_pool())
+    opt_work_update = true;
+out:
+  /* Annoying but we must not leak memory */
+  if (job_id != NULL)
+    free(job_id);
+  return ret;
+}
+
 static bool parse_diff(struct pool *pool, json_t *val)
 {
   double old_diff, diff;
@@ -2217,6 +2294,20 @@ bool parse_method(struct pool *pool, char *s)
     goto done;
   }
   
+  //cryptonight uses the "job" method instead of mining.notify
+  if (pool->algorithm.type == ALGO_CRYPTONIGHT) {
+    if (!strncasecmp(buf, "job", 3)) {
+      if (parse_notify_cn(pool, params)) {
+        pool->stratum_notify = ret = true;
+      }
+      else {
+        pool->stratum_notify = ret = false;
+      }
+      
+      goto done;
+    }
+  }
+  
   if (!strncasecmp(buf, "mining.set_difficulty", 21) && parse_diff(pool, params)) {
     ret = true;
     goto done;
@@ -2328,13 +2419,22 @@ out:
 
 bool auth_stratum(struct pool *pool)
 {
-  json_t *val = NULL, *res_val, *err_val;
+  json_t *val = NULL, *res_val, *err_val, *res_id, *res_job;
   char s[RBUFSIZE], *sret = NULL;
   json_error_t err;
   bool ret = false;
 
-  sprintf(s, "{\"id\": %d, \"method\": \"mining.authorize\", \"params\": [\"%s\", \"%s\"]}",
-    swork_id++, pool->rpc_user, pool->rpc_pass);
+  if (pool->algorithm.type == ALGO_CRYPTONIGHT) {
+    sprintf(s, "{\"method\": \"login\", \"params\": {\"login\": \"%s\", \"pass\": \"%s\", \"agent\": \"%s/%s\"}, \"id\": 1}",
+      pool->rpc_user, pool->rpc_pass, PACKAGE, VERSION);
+  
+    
+    swork_id++;
+  }
+  else {
+    sprintf(s, "{\"id\": %d, \"method\": \"mining.authorize\", \"params\": [\"%s\", \"%s\"]}",
+      swork_id++, pool->rpc_user, pool->rpc_pass);
+  }
 
   if (!stratum_send(pool, s, strlen(s))) {
     return ret;
@@ -2374,7 +2474,27 @@ bool auth_stratum(struct pool *pool)
 
     goto out;
   }
-
+  
+  //check if the result contains an id... if so then we need to process as first job
+  if (pool->algorithm.type == ALGO_CRYPTONIGHT) {
+    if ((res_id = json_object_get(res_val, "id"))) {
+      cg_wlock(&pool->data_lock);
+      strcpy(pool->XMRAuthID, json_string_value(res_id));
+      applog(LOG_DEBUG, "XMR AuthID: %s", pool->XMRAuthID);
+      cg_wunlock(&pool->data_lock);
+      
+      //get the job object and send to parse notify
+      if ((res_job = json_object_get(res_val, "job"))) {
+        if (parse_notify_cn(pool, res_job)) {
+          pool->stratum_notify = true;
+        }
+        else {
+          goto out;
+        }
+      }
+    }
+  }
+  
   ret = true;
   applog(LOG_INFO, "Stratum authorisation success for %s", get_pool_name(pool));
   pool->probed = true;
@@ -2827,7 +2947,26 @@ resend:
     sockd = false;
     goto out;
   }
-
+  
+  //Cryptonight doesn't subscribe...
+	if(pool->algorithm.type == ALGO_CRYPTONIGHT)
+	{
+		if (!pool->stratum_url) { 
+      pool->stratum_url = pool->sockaddr_url;
+    }
+		
+		pool->stratum_active = true;
+		pool->next_diff = 0;
+		pool->swork.diff = 1;
+		
+		pool->sessionid = NULL;
+		pool->nonce1 = NULL;
+		pool->n1_len = 0;
+		
+		json_decref(val);
+		return true;
+	}
+  
   sockd = true;
 
   if (recvd) {
