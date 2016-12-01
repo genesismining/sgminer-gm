@@ -492,12 +492,12 @@ char *set_temp_overheat(char *arg)
       return "Invalid value passed to set temp overheat";
 
     gpus[device].adl.overtemp = val;
-	gpus[device++].sysfs_info.OverHeatTemp = val;
+  gpus[device++].sysfs_info.OverHeatTemp = val;
   }
   if (device == 1) {
     for (i = device; i < MAX_GPUDEVICES; i++) {
       gpus[i].adl.overtemp = val;
-	gpus[i].sysfs_info.OverHeatTemp = val;
+  gpus[i].sysfs_info.OverHeatTemp = val;
     }
   }
 
@@ -529,7 +529,7 @@ char *set_temp_target(char *arg)
     tt = &gpus[device].adl.targettemp;
     *tt = val;
     tt = &gpus[device++].sysfs_info.TargetTemp;
-	*tt = val;
+  *tt = val;
     
   }
   if (device == 1) {
@@ -537,7 +537,7 @@ char *set_temp_target(char *arg)
       tt = &gpus[i].adl.targettemp;
       *tt = val;
       tt = &gpus[i].sysfs_info.TargetTemp;
-	  *tt = val;
+    *tt = val;
     }
   }
 
@@ -1455,7 +1455,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
       // increase nonce
       work->blk.nonce++;
       if (work->getwork_mode == GETWORK_MODE_STRATUM)
-	*(uint16_t*)(work->equihash_data + 108 + strlen(work->nonce1) / 2) += 1;
+  *(uint16_t*)(work->equihash_data + 108 + strlen(work->nonce1) / 2) += 1;
       else {
         *(uint64_t*)(work->equihash_data + 108) += 1;
         
@@ -1476,128 +1476,115 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
   }
   // if (algorithm.type == ALGO_ETHASH) read lock gpu->eth_dag.lock has to be released
   
-  if(gpu->algorithm.type == ALGO_CRYPTONIGHT)
-  {
-	mutex_lock(&work->pool->XMRGlobalNonceLock);
-	work->blk.nonce = work->pool->XMRGlobalNonce;
-	work->pool->XMRGlobalNonce += gpu->max_hashes;
-	mutex_unlock(&work->pool->XMRGlobalNonceLock);
+  if(gpu->algorithm.type == ALGO_CRYPTONIGHT) {
+    mutex_lock(&work->pool->XMRGlobalNonceLock);
+    work->blk.nonce = work->pool->XMRGlobalNonce;
+    work->pool->XMRGlobalNonce += gpu->max_hashes;
+    mutex_unlock(&work->pool->XMRGlobalNonceLock);
   }
   
   if (clState->goffset)
     p_global_work_offset = (size_t *)&work->blk.nonce;
   
-  if(gpu->algorithm.type == ALGO_CRYPTONIGHT)
-	{
-		size_t GlobalThreads = *globalThreads, Nonce[2] = { (size_t)work->blk.nonce, 1}, gthreads[2] = { *globalThreads, 8 }, lthreads[2] = { *localThreads, 8 };
-		size_t BranchBufCount[4] = { 0, 0, 0, 0 };
-		
-		for(int i = 0; i < 4; ++i)
-		{
-			cl_uint zero = 0;
+  if (gpu->algorithm.type == ALGO_CRYPTONIGHT) {
+    size_t GlobalThreads = *globalThreads, Nonce[2] = { (size_t)work->blk.nonce, 1}, gthreads[2] = { *globalThreads, 8 }, lthreads[2] = { *localThreads, 8 };
+    size_t BranchBufCount[4] = { 0, 0, 0, 0 };
+    
+    for (int i = 0; i < 4; ++i) {
+      cl_uint zero = 0;
 
-			status = clEnqueueWriteBuffer(clState->commandQueue, clState->BranchBuffer[i], CL_FALSE, sizeof(cl_uint) * GlobalThreads, sizeof(cl_uint), &zero, 0, NULL, NULL);
+      status = clEnqueueWriteBuffer(clState->commandQueue, clState->BranchBuffer[i], CL_FALSE, sizeof(cl_uint) * GlobalThreads, sizeof(cl_uint), &zero, 0, NULL, NULL);
 
-			if(status != CL_SUCCESS)
-			{
-				applog(LOG_ERR, "Error %d while resetting branch buffer counter %d.\n", status, i);
-				return(-1);
-			}
-		}
-		
-		clFinish(clState->commandQueue);
-		
-		// Main CN P0
-		status = clEnqueueNDRangeKernel(clState->commandQueue, clState->kernel, 2, Nonce, gthreads, lthreads, 0, NULL, NULL);
-		
-		if(status != CL_SUCCESS)
-		{
-			applog(LOG_ERR, "Error %d while attempting to enqueue kernel 0.", status);
-			return(-1);
-		}
-		
-		// Main CN P1
-		status = clEnqueueNDRangeKernel(clState->commandQueue, clState->extra_kernels[0], 1, p_global_work_offset, globalThreads, localThreads, 0, NULL, NULL);
-		
-		if(status != CL_SUCCESS)
-		{
-			applog(LOG_ERR, "Error %d while attempting to enqueue kernel 1.", status);
-			return(-1);
-		}
-		
-		// Main CN P2
-		status = clEnqueueNDRangeKernel(clState->commandQueue, clState->extra_kernels[1], 2, Nonce, gthreads, lthreads, 0, NULL, NULL);
-		
-		if(status != CL_SUCCESS)
-		{
-			applog(LOG_ERR, "Error %d while attempting to enqueue kernel 2.", status);
-			return(-1);
-		}
-		
-		// Read BranchBuf counters
-		
-		for(int i = 0; i < 4; ++i)
-		{
-			status = clEnqueueReadBuffer(clState->commandQueue, clState->BranchBuffer[i], CL_FALSE, sizeof(cl_uint) * GlobalThreads, sizeof(cl_uint), BranchBufCount + i, 0, NULL, NULL);
-			
-			if(status != CL_SUCCESS)
-			{
-				applog(LOG_ERR, "Error %d while attempting to read branch buffer counter %d.", status, i);
-				return(-1);
-			}
-		}
-		
-		clFinish(clState->commandQueue);
-		
-		for(int i = 0; i < 4; ++i)
-		{
-			if(BranchBufCount[i])
-			{
-				cl_ulong tmp = BranchBufCount[i];
-				
-				// Threads
-				status = clSetKernelArg(clState->extra_kernels[i + 2], 4, sizeof(cl_ulong), &tmp);
-				
-				if(status != CL_SUCCESS)
-				{
-					applog(LOG_ERR, "Error %d while attempting to set argument 4 for kernel %d.", status, i + 2);
-					return(-1);
-				}
-				
-				// Make it a multiple of the local worksize (some drivers will otherwise shit a brick)
-				BranchBufCount[i] += (clState->wsize - (BranchBufCount[i] & (clState->wsize - 1)));
-				
-				status = clEnqueueNDRangeKernel(clState->commandQueue, clState->extra_kernels[i + 2], 1, p_global_work_offset, BranchBufCount + i, localThreads, 0, NULL, NULL);
-				
-				if(status != CL_SUCCESS)
-				{
-					applog(LOG_ERR, "Error %d while attempting to enqueue kernel %d.", status, i + 2);
-					return(-1);
-				}
-			}
-		}
-	}
-	else
-	{
-	  status = clEnqueueNDRangeKernel(clState->commandQueue, clState->kernel, 1, p_global_work_offset,
-		globalThreads, localThreads, 0, NULL, NULL);
-	  if (unlikely(status != CL_SUCCESS)) {
-		if (work->pool->algorithm.type == ALGO_ETHASH)
-		  cg_runlock(&gpu->eth_dag.lock);
-		applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)", status);
-		return -1;
-	  }
+      if(status != CL_SUCCESS) {
+        applog(LOG_ERR, "Error %d while resetting branch buffer counter %d.\n", status, i);
+        return -1;
+      }
+    }
+    
+    clFinish(clState->commandQueue);
+    
+    // Main CN P0
+    status = clEnqueueNDRangeKernel(clState->commandQueue, clState->kernel, 2, Nonce, gthreads, lthreads, 0, NULL, NULL);
+    
+    if (status != CL_SUCCESS) {
+      applog(LOG_ERR, "Error %d while attempting to enqueue kernel 0.", status);
+      return -1;
+    }
+    
+    // Main CN P1
+    status = clEnqueueNDRangeKernel(clState->commandQueue, clState->extra_kernels[0], 1, p_global_work_offset, globalThreads, localThreads, 0, NULL, NULL);
+    
+    if (status != CL_SUCCESS) {
+      applog(LOG_ERR, "Error %d while attempting to enqueue kernel 1.", status);
+      return -1;
+    }
+    
+    // Main CN P2
+    status = clEnqueueNDRangeKernel(clState->commandQueue, clState->extra_kernels[1], 2, Nonce, gthreads, lthreads, 0, NULL, NULL);
+    
+    if (status != CL_SUCCESS) {
+      applog(LOG_ERR, "Error %d while attempting to enqueue kernel 2.", status);
+      return -1;
+    }
+    
+    // Read BranchBuf counters
+    
+    for (int i = 0; i < 4; ++i) {
+      status = clEnqueueReadBuffer(clState->commandQueue, clState->BranchBuffer[i], CL_FALSE, sizeof(cl_uint) * GlobalThreads, sizeof(cl_uint), BranchBufCount + i, 0, NULL, NULL);
+      
+      if(status != CL_SUCCESS) {
+        applog(LOG_ERR, "Error %d while attempting to read branch buffer counter %d.", status, i);
+        return(-1);
+      }
+    }
+    
+    clFinish(clState->commandQueue);
+    
+    for (int i = 0; i < 4; ++i) {
+      if(BranchBufCount[i]) {
+        cl_ulong tmp = BranchBufCount[i];
+        
+        // Threads
+        status = clSetKernelArg(clState->extra_kernels[i + 2], 4, sizeof(cl_ulong), &tmp);
+        
+        if (status != CL_SUCCESS) {
+          applog(LOG_ERR, "Error %d while attempting to set argument 4 for kernel %d.", status, i + 2);
+          return -1;
+        }
+        
+        // Make it a multiple of the local worksize (some drivers will otherwise shit a brick)
+        BranchBufCount[i] += (clState->wsize - (BranchBufCount[i] & (clState->wsize - 1)));
+        
+        status = clEnqueueNDRangeKernel(clState->commandQueue, clState->extra_kernels[i + 2], 1, p_global_work_offset, BranchBufCount + i, localThreads, 0, NULL, NULL);
+        
+        if (status != CL_SUCCESS) {
+          applog(LOG_ERR, "Error %d while attempting to enqueue kernel %d.", status, i + 2);
+          return -1;
+        }
+      }
+    }
+  }
+  else {
+    status = clEnqueueNDRangeKernel(clState->commandQueue, clState->kernel, 1, p_global_work_offset,
+      globalThreads, localThreads, 0, NULL, NULL);
 
-	  for (i = 0; i < clState->n_extra_kernels; i++) {
-		status = clEnqueueNDRangeKernel(clState->commandQueue, clState->extra_kernels[i], 1, p_global_work_offset,
-		  globalThreads, localThreads, 0, NULL, NULL);
-		if (unlikely(status != CL_SUCCESS)) {
-		  applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)", status);
-		  return -1;
-		}
-	  }
-	}
-	
+    if (unlikely(status != CL_SUCCESS)) {
+      if (work->pool->algorithm.type == ALGO_ETHASH)
+        cg_runlock(&gpu->eth_dag.lock);
+      applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)", status);
+      return -1;
+    }
+
+    for (i = 0; i < clState->n_extra_kernels; i++) {
+      status = clEnqueueNDRangeKernel(clState->commandQueue, clState->extra_kernels[i], 1, p_global_work_offset,
+      globalThreads, localThreads, 0, NULL, NULL);
+      if (unlikely(status != CL_SUCCESS)) {
+        applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)", status);
+        return -1;
+      }
+    }
+  }
+  
   status = clEnqueueReadBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
     buffersize, thrdata->res, 0, NULL, NULL);
   if (unlikely(status != CL_SUCCESS)) {
@@ -1628,9 +1615,9 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
     }
     applog(LOG_DEBUG, "GPU %d found something?", gpu->device_id);
     postcalc_hash_async(thr, work, thrdata->res);
-//	postcalc_hash(thr);
-//	submit_tested_work(thr, work);
-//	submit_work_async(work);
+//  postcalc_hash(thr);
+//  submit_tested_work(thr, work);
+//  submit_work_async(work);
     memset(thrdata->res, 0, buffersize);
     /* This finish flushes the writebuffer set with CL_FALSE in clEnqueueWriteBuffer */
     clFinish(clState->commandQueue);
@@ -1652,12 +1639,12 @@ static void opencl_thread_shutdown(struct thr_info *thr)
     clFinish(clState->commandQueue);
     clReleaseMemObject(clState->outputBuffer);
     clReleaseMemObject(clState->CLbuffer0);
-	if (clState->buffer1)
-	clReleaseMemObject(clState->buffer1);
-	if (clState->buffer2)
-	clReleaseMemObject(clState->buffer2);
-	if (clState->buffer3)
-	clReleaseMemObject(clState->buffer3);
+  if (clState->buffer1)
+  clReleaseMemObject(clState->buffer1);
+  if (clState->buffer2)
+  clReleaseMemObject(clState->buffer2);
+  if (clState->buffer3)
+  clReleaseMemObject(clState->buffer3);
     if (clState->padbuffer8)
       clReleaseMemObject(clState->padbuffer8);
     clReleaseKernel(clState->kernel);

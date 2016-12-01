@@ -109,9 +109,6 @@ void set_algorithm(algorithm_t* algo, const char* name);
 /* Set to specific N factor. */
 void set_algorithm_nfactor(algorithm_t* algo, const uint8_t nfactor);
 
-/* Set to specific K factor. */
-void set_algorithm_kfactor(algorithm_t* algo, const uint8_t kfactor);
-
 /* Compare two algorithm parameters */
 bool cmp_algorithm(const algorithm_t* algo1, const algorithm_t* algo2);
 

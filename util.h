@@ -135,6 +135,7 @@ bool stratum_send(struct pool *pool, char *s, ssize_t len);
 bool sock_full(struct pool *pool);
 char *recv_line(struct pool *pool);
 bool parse_method(struct pool *pool, char *s);
+bool parse_notify_cn(struct pool *pool, json_t *val);
 bool extract_sockaddr(char *url, char **sockaddr_url, char **sockaddr_port);
 bool auth_stratum(struct pool *pool);
 bool subscribe_extranonce(struct pool *pool);

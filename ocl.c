@@ -959,7 +959,7 @@ out:
      * 2 greater >= required amount earlier */
     if (bufsize > cgpu->max_alloc) {
       applog(LOG_WARNING, "Maximum buffer memory device %d supports says %lu",
-        gpu, (unsigned long)(cgpu->max_alloc));
+	gpu, (unsigned long)(cgpu->max_alloc));
       applog(LOG_WARNING, "Your settings come to %lu", (unsigned long)bufsize);
     }
 
@@ -967,35 +967,35 @@ out:
       // need additionnal buffers
       clState->buffer1 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, buf1size, NULL, &status);
       if (status != CL_SUCCESS && !clState->buffer1) {
-        applog(LOG_DEBUG, "Error %d: clCreateBuffer (buffer1), decrease TC or increase LG", status);
-        return NULL;
+	applog(LOG_DEBUG, "Error %d: clCreateBuffer (buffer1), decrease TC or increase LG", status);
+	return NULL;
       }
 
       clState->buffer2 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, buf2size, NULL, &status);
       if (status != CL_SUCCESS && !clState->buffer2) {
-        applog(LOG_DEBUG, "Error %d: clCreateBuffer (buffer2), decrease TC or increase LG", status);
-        return NULL;
+	applog(LOG_DEBUG, "Error %d: clCreateBuffer (buffer2), decrease TC or increase LG", status);
+	return NULL;
       }
 
       clState->buffer3 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, buf3size, NULL, &status);
       if (status != CL_SUCCESS && !clState->buffer3) {
-        applog(LOG_DEBUG, "Error %d: clCreateBuffer (buffer3), decrease TC or increase LG", status);
-        return NULL;
+	applog(LOG_DEBUG, "Error %d: clCreateBuffer (buffer3), decrease TC or increase LG", status);
+	return NULL;
       }
     }
     else if (algorithm->type == ALGO_LYRA2REV2) {
       // need additionnal buffers
       clState->buffer1 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, buf1size, NULL, &status);
       if (status != CL_SUCCESS && !clState->buffer1) {
-        applog(LOG_DEBUG, "Error %d: clCreateBuffer (buffer1), decrease TC or increase LG", status);
-        return NULL;
+	applog(LOG_DEBUG, "Error %d: clCreateBuffer (buffer1), decrease TC or increase LG", status);
+	return NULL;
       }
     }
     else {
       clState->buffer1 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, bufsize, NULL, &status); // we don't need that much just tired...
       if (status != CL_SUCCESS && !clState->buffer1) {
-        applog(LOG_DEBUG, "Error %d: clCreateBuffer (buffer1), decrease TC or increase LG", status);
-        return NULL;
+	applog(LOG_DEBUG, "Error %d: clCreateBuffer (buffer1), decrease TC or increase LG", status);
+	return NULL;
       }
     }
 
@@ -1009,40 +1009,35 @@ out:
     }
   }
   
-	if(algorithm->type == ALGO_CRYPTONIGHT)
-	{
-		size_t GlobalThreads;
-		readbufsize = 76UL;
+  if (algorithm->type == ALGO_CRYPTONIGHT) {
+    size_t GlobalThreads;
+    readbufsize = 76UL;
 		
-		set_threads_hashes(1, clState->compute_shaders, &GlobalThreads, 1, &cgpu->intensity, &cgpu->xintensity, &cgpu->rawintensity, &cgpu->algorithm);
+    set_threads_hashes(1, clState->compute_shaders, &GlobalThreads, 1, &cgpu->intensity, &cgpu->xintensity, &cgpu->rawintensity, &cgpu->algorithm);
 		
-		for(int i = 0; i < 4; ++i)
-		{
-			clState->BranchBuffer[i] = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, sizeof(cl_uint) * (GlobalThreads + 2), NULL, &status);
+    for (int i = 0; i < 4; ++i) {
+      clState->BranchBuffer[i] = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, sizeof(cl_uint) * (GlobalThreads + 2), NULL, &status);
 			
-			if(status != CL_SUCCESS)
-			{
-				applog(LOG_ERR, "Error %d when creating branch buffer %d.\n", status, i);
-				return NULL;
-			}
-		}
+      if (status != CL_SUCCESS) {
+        applog(LOG_ERR, "Error %d when creating branch buffer %d.\n", status, i);
+        return NULL;
+      }
+    }
 		
-		clState->States = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, 200 * GlobalThreads, NULL, &status);
+    clState->States = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, 200 * GlobalThreads, NULL, &status);
 		
-		if(status != CL_SUCCESS)
-		{
-			applog(LOG_ERR, "Error %d when creating Cryptonight state buffer.\n", status);
-			return NULL;
-		}
+    if(status != CL_SUCCESS) {
+      applog(LOG_ERR, "Error %d when creating Cryptonight state buffer.\n", status);
+      return NULL;
+    }
 		
-		clState->Scratchpads = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, (1 << 21) * GlobalThreads, NULL, &status);
+    clState->Scratchpads = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, (1 << 21) * GlobalThreads, NULL, &status);
 		
-		if(status != CL_SUCCESS)
-		{
-			applog(LOG_ERR, "Error %d when creating Cryptonight scratchpads buffer.\n", status);
-			return NULL;
-		}
-	}
+    if(status != CL_SUCCESS) {
+      applog(LOG_ERR, "Error %d when creating Cryptonight scratchpads buffer.\n", status);
+      return NULL;
+    }
+  }
   
   applog(LOG_DEBUG, "Using read buffer sized %lu", (unsigned long)readbufsize);
   clState->CLbuffer0 = clCreateBuffer(clState->context, CL_MEM_READ_ONLY, readbufsize, NULL, &status);
