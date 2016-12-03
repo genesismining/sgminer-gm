@@ -6002,17 +6002,13 @@ static void *stratum_sthread(void *userdata)
       applog(LOG_DEBUG, "stratum_sthread() algorithm = %s", pool->algorithm.name);
 		
       char *ASCIINonce = bin2hex(&work->XMRNonce, 4);
-      applog(LOG_DEBUG, "test");
       
       ASCIIResult = bin2hex(work->hash, 32);
-      applog(LOG_DEBUG, "adsf");
        
       mutex_lock(&sshare_lock);
-      applog(LOG_DEBUG, "adsf");
       /* Give the stratum share a unique id */
       sshare->id = swork_id++;
       mutex_unlock(&sshare_lock);
-      applog(LOG_DEBUG, "adsf");
       s = malloc(s_size);
       snprintf(s, s_size, "{\"method\": \"submit\", \"params\": {\"id\": \"%s\", \"job_id\": \"%s\", \"nonce\": \"%s\", \"result\": \"%s\"}, \"id\":%d}", pool->XMRAuthID, work->job_id, ASCIINonce, ASCIIResult, sshare->id);
 
