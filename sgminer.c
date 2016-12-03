@@ -1962,7 +1962,7 @@ static void calc_midstate(struct work *work)
 
 static struct work *make_work(void)
 {
-  struct work *w = (struct work *)calloc(1, sizeof(struct work));
+  struct work *w = (struct work *)calloc(sizeof(struct work), 1);
 
   if (unlikely(!w))
     quit(1, "Failed to calloc work in make_work");
@@ -5943,7 +5943,7 @@ static void *stratum_sthread(void *userdata)
     char noncehex[12], nonce2hex[20], *s; // s[126 + 16 + 2048];
     struct stratum_share *sshare;
     uint32_t *hash32, nonce;
-    size_t s_size = 2190;
+    size_t s_size = 2500;
     unsigned char nonce2[8];
     uint64_t *nonce2_64;
     struct work *work;
@@ -5956,8 +5956,8 @@ static void *stratum_sthread(void *userdata)
     if (unlikely(!work))
       quit(1, "Stratum q returned empty work");
 
+    hash32 = (uint32_t*) work->hash;
     if(pool->algorithm.type == ALGO_ETHASH) {
-      hash32 = (uint32_t *)work->hash;
       submitted = false;
 
       if (!(sshare = (struct stratum_share *)calloc(sizeof(struct stratum_share), 1))) {
@@ -6002,13 +6002,18 @@ static void *stratum_sthread(void *userdata)
       applog(LOG_DEBUG, "stratum_sthread() algorithm = %s", pool->algorithm.name);
 		
       char *ASCIINonce = bin2hex(&work->XMRNonce, 4);
+      applog(LOG_DEBUG, "test");
       
       ASCIIResult = bin2hex(work->hash, 32);
+      applog(LOG_DEBUG, "adsf");
        
       mutex_lock(&sshare_lock);
+      applog(LOG_DEBUG, "adsf");
       /* Give the stratum share a unique id */
       sshare->id = swork_id++;
       mutex_unlock(&sshare_lock);
+      applog(LOG_DEBUG, "adsf");
+      s = malloc(s_size);
       snprintf(s, s_size, "{\"method\": \"submit\", \"params\": {\"id\": \"%s\", \"job_id\": \"%s\", \"nonce\": \"%s\", \"result\": \"%s\"}, \"id\":%d}", pool->XMRAuthID, work->job_id, ASCIINonce, ASCIIResult, sshare->id);
 
       free(ASCIINonce);
@@ -6017,7 +6022,6 @@ static void *stratum_sthread(void *userdata)
  
     else if(pool->algorithm.type == ALGO_EQUIHASH) {
       char *nonce;
-      hash32 = (uint32_t *)work->hash;
       char *solution;
       submitted = false;
 
@@ -6060,7 +6064,6 @@ static void *stratum_sthread(void *userdata)
       }
 
       // TODO: check for memory leaks
-      hash32 = (uint32_t *)work->hash;
       submitted = false;
 
       if (!(sshare = (struct stratum_share *)calloc(sizeof(struct stratum_share), 1))) {

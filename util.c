@@ -1979,7 +1979,7 @@ bool parse_notify_cn(struct pool *pool, json_t *val)
   }
   
   job_id = json_string_value(jid);
-  XMRTarget = bswap_32(strtoul(json_string_value(target), NULL, 16));
+  hex2bin(&XMRTarget, json_string_value(target), 4);
 
   cg_wlock(&pool->data_lock);
   
@@ -2013,9 +2013,6 @@ bool parse_notify_cn(struct pool *pool, json_t *val)
   if (pool == current_pool())
     opt_work_update = true;
 out:
-  /* Annoying but we must not leak memory */
-  if (job_id != NULL)
-    free(job_id);
   return ret;
 }
 
