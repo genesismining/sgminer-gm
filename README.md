@@ -89,7 +89,7 @@ Then:
 To compile a version that can be used accross machines, remove
 `-march=native`.
 
-To compile a debug version, replace `-O2` with `-ggdb`.
+To compile a debug version, replace `-O2` with `-ggdb -fgnu89-inline`.
 
 Depending on your environment, replace `-std=gnu99` with `-std=c99`.
 
