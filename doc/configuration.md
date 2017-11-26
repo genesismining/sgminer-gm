@@ -1262,7 +1262,7 @@ Used with [auto-fan](#auto-fan) and [auto-gpu](#auto-gpu).
 
 [Top](#configuration-and-command-line-options) :: [Config-file and CLI options](#config-file-and-cli-options) :: [GPU Options](#gpu-options)
 
-### temp-cutoff
+### temp-hysteresis
 
 Set the allowable temperature fluctuation a GPU can operate outside of limits.
 
