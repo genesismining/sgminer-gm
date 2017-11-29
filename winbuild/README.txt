@@ -32,12 +32,11 @@ x64 version:
 2. Install AMD APP SDK (OpenCL), latest version
 -----------------------------------------------
 - go to http://developer.amd.com/tools-and-sdks/opencl-zone/amd-accelerated-parallel-processing-app-sdk/ and download appropriate version (x86/x64) and install
-- copy C:\Program Files (x86)\AMD APP SDK\2.9\lib\x86\OpenCL.lib to winbuild/dist/lib/x86/
-- copy C:\Program Files (x86)\AMD APP SDK\2.9\bin\x86\OpenCL.dll to winbuild/dist/dll/x86/
-- copy C:\Program Files (x86)\AMD APP SDK\2.9\lib\x86_64\OpenCL.lib to winbuild/dist/lib/x64/
-- copy C:\Program Files (x86)\AMD APP SDK\2.9\bin\x86_64\OpenCL.dll to winbuild/dist/dll/x64/
-- copy C:\Program Files (x86)\AMD APP SDK\2.9\include\CL\* winbuild/dist/include/CL/
-
+- copy C:\Program Files (x86)\AMD APP SDK\3.0\lib\x86\OpenCL.lib to winbuild/dist/lib/x86/
+- copy C:\Program Files (x86)\AMD APP SDK\3.0\bin\x86\OpenCL.dll to winbuild/dist/dll/x86/
+- copy C:\Program Files (x86)\AMD APP SDK\3.0\lib\x86_64\OpenCL.lib to winbuild/dist/lib/x64/
+- copy C:\Program Files (x86)\AMD APP SDK\3.0\bin\x86_64\OpenCL.dll to winbuild/dist/dll/x64/
+- copy C:\Program Files (x86)\AMD APP SDK\3.0\include\CL\* winbuild/dist/include/CL/
 
 3. PDCurses
 -----------
@@ -68,21 +67,20 @@ x64 version:
 4. Curl
 -------
 - go to http://curl.haxx.se/download.html and download latest source (>=7.39.0) and extract it somewhere
-- replace original curl winbuild\MakefileBuild.vc with provided winbuild\MakefileBuild.vc (corrected paths and static library names for VC)
 
 x86 version:
 - open Visual Studio Command Prompt (x86)
 	- go to winbuild folder and execute:
 		nmake -f Makefile.vc mode=static VC=13 WITH_DEVEL=C:\OpenSSL-Win32 WITH_SSL=static ENABLE_SSPI=no ENABLE_IPV6=no ENABLE_IDN=no GEN_PDB=no DEBUG=no MACHINE=x86
-	- copy builds\libcurl-vc13-x86-release-static-ssl-static-spnego\lib\libcurl_a.lib to winbuild\dist\lib\x86
-	- copy builds	\libcurl-vc13-x86-release-static-ssl-static-spnego\include\* winbuild\dist\include\
+	- copy builds \libcurl-vc13-x86-release-static-ssl-static\lib\libcurl_a.lib to winbuild\dist\lib\x86
+	- copy builds \libcurl-vc13-x86-release-static-ssl-static\include\* winbuild\dist\include\curl
 
 x64 version:
 - open Visual Studio Command Prompt (x64)
 	- go to winbuild folder and execute:
 		nmake -f Makefile.vc mode=static VC=13 WITH_DEVEL=C:\OpenSSL-Win64 WITH_SSL=static ENABLE_SSPI=no ENABLE_IPV6=no ENABLE_IDN=no GEN_PDB=no DEBUG=no MACHINE=x64
-	- copy builds\libcurl-vc13-x64-release-static-ssl-static-spnego\lib\libcurl_a.lib to winbuild\dist\lib\x64
-	- copy builds\libcurl-vc13-x64-release-static-ssl-static-spnego\include\* winbuild\dist\include\
+	- copy builds \libcurl-vc13-x64-release-static-ssl-static\lib\libcurl_a.lib to winbuild\dist\lib\x64
+	- copy builds \libcurl-vc13-x64-release-static-ssl-static\include\* winbuild\dist\include\curl
 
 5. Jansson
 ----------
@@ -92,3 +90,8 @@ If using git run commands below from sgminer/ folder:
   git submodule update
   
 or clone/extract Jansson source from https://github.com/akheron/jansson to submodules/jansson folder.
+
+6. Install AMD Display Library (ADL) SDK, latest version
+- go to http://developer.amd.com/display-library-adl-sdk/ and download latest version and extract it somewhere
+- copy include\adl_sdk.h to sgminer-gm/ADL_SDK/
+- copy include\adl_structures.h to sgminer-gm/ADL_SDK/
