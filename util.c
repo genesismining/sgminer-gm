@@ -1367,7 +1367,7 @@ bool sock_keepalived(struct pool *pool, const char *rpc2_id, int work_id)
   bool ret = false;
 
   if (pool->algorithm.type == ALGO_CRYPTONIGHT) {
-    s = malloc(300 + strlen(rpc2_id) + 10);
+    s = static_cast<char*>(malloc(300 + strlen(rpc2_id) + 10));
     snprintf(s, 128, "{\"method\": \"keepalived\", \"params\": {\"id\": \"%s\"}, \"id\":%d}", rpc2_id, work_id);
   } else {
     return true;
@@ -1849,6 +1849,9 @@ bool parse_diff_ethash(char* Target, const char* TgtStr)
 {
   bool ret = false;
   int len = strlen(TgtStr);
+
+  unsigned char* Target_unsigned = (unsigned char*)(Target);
+
   if(len != 64 && len != 66) {
     char NewTgtStr[65];
     int offset = (len > 2 && TgtStr[1] == 'x' ? 2 : 0);
@@ -1859,11 +1862,13 @@ bool parse_diff_ethash(char* Target, const char* TgtStr)
       memcpy(NewTgtStr + PadLen, TgtStr + offset, len - offset);
     
       NewTgtStr[64] = 0x00;
-      ret = hex2bin(Target, NewTgtStr, 32);
+
+	  ret = hex2bin(Target_unsigned, NewTgtStr, 32);
     }
   }
-  else
-    ret = hex2bin(Target, TgtStr + 2, 32) || hex2bin(Target, TgtStr, 32);
+  else{
+	  ret = hex2bin(Target_unsigned, TgtStr + 2, 32) || hex2bin(Target_unsigned, TgtStr, 32);
+  }
   return ret;
 }
 
@@ -1905,9 +1910,9 @@ static bool parse_notify_ethash(struct pool *pool, json_t *val)
   
   ret &= hex2bin(SeedHash, SeedHashStr + 2, 32) || hex2bin(SeedHash, SeedHashStr, 32);
   
-  ret &= parse_diff_ethash(Target, TgtStr);
+  ret &= parse_diff_ethash((char*)(Target), TgtStr);
   
-  if (!ret || (NetDiffStr != NULL && !parse_diff_ethash(NetDiff, NetDiffStr))) {
+  if (!ret || (NetDiffStr != NULL && !parse_diff_ethash((char*)(NetDiff), NetDiffStr))) {
     ret = false;
     goto out;
   }
@@ -2011,8 +2016,11 @@ bool parse_notify_cn(struct pool *pool, json_t *val)
     goto out;
   }
   
-  job_id = json_string_value(jid);
-  hex2bin(&XMRTarget, json_string_value(target), 4);
+  job_id = const_cast<char *>(json_string_value(jid));
+
+  unsigned char XMRTarget_unsigned = static_cast<unsigned char>(XMRTarget);
+
+  hex2bin(&XMRTarget_unsigned, json_string_value(target), 4);
 
   cg_wlock(&pool->data_lock);
   
@@ -2093,12 +2101,12 @@ static bool parse_target(struct pool *pool, json_t *val)
 {
   uint8_t oldtarget[32], target[32], *str;
 
-  if ((str = json_array_string(val, 0)) == NULL) {
+  if ((str = reinterpret_cast<uint8_t *>(json_array_string(val, 0))) == NULL) {
     applog(LOG_DEBUG, "parse_target: Missing an array value.");
     return false;
   }
 
-  hex2bin(target, str, 32);
+  hex2bin(target, (const char*)(str), 32);
 
   cg_wlock(&pool->data_lock);
   memcpy(oldtarget, pool->Target, 32);
