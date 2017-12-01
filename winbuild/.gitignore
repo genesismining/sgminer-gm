@@ -70,6 +70,10 @@ packages/
 #Config
 !dist/include/config.h
 
+#curses is imported during the install
+dist/include/curses.h
+
+
 #Library archives
 *.zip
 *.rar

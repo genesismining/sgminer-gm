@@ -101,7 +101,7 @@ directory directly, or `make install` if you wish to install
 
 See `doc/windows-build.txt` for MinGW compilation and cross-compiation,
 `doc/cygwin-build.txt` for building using Cygwin, or use the provided
-`winbuild` Microsoft Visual Studio project (tested on MSVS2010), with
+`winbuild` Microsoft Visual Studio project (tested on MSVS2013), with
 instructions in `winbuild/README.txt`.
 
 
