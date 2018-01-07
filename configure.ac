@@ -2,8 +2,8 @@
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_maj], [5])
 m4_define([v_min], [5])
-m4_define([v_mic], [5])
-m4_define([v_rev], [gm-a])
+m4_define([v_mic], [6])
+m4_define([v_rev], [gm])
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_ifdef([v_rev], [m4_define([v_ver], [v_maj.v_min.v_mic-v_rev])], [m4_define([v_ver], [v_maj.v_min.v_mic])])
 m4_define([lt_rev], m4_eval(v_maj + v_min))
@@ -127,6 +127,21 @@ if test "x$have_win32" != xtrue; then
 	if test "x$AMDAPPSDKROOT" != x; then
 		OPENCL_FLAGS="-I$AMDAPPSDKROOT/include $OPENCL_FLAGS"
 		OPENCL_LIBS="-L$AMDAPPSDKROOT/lib/$ARCH_DIR $OPENCL_LIBS"
+	fi
+
+# Use amdgpu-pro driver and AMDAPPSDK-3.0 if we have them available. This will use the OpenCL
+# library shipped with amdgpu-pro if available, or fall back to the one shipped wit thr
+# AMDAPPSDK if the user doesn't have amdgpu-pro.
+
+	if test -r "/opt/AMDAPPSDK-3.0/include/CL/cl.h"; then
+		OPENCL_FLAGS="-I/opt/AMDAPPSDK-3.0/include $OPENCL_FLAGS";
+		if test -r "/opt/amdgpu-pro/lib/x86_64-linux-gnu/libOpenCL.so"; then
+			OPENCL_LIBS="-L/opt/amdgpu-pro/lib/x86_64-linux-gnu $OPENCL_LIBS";
+		else
+			OPENCL_LIBS="-L/opt/AMDAPPSDK-3.0/lib/x86_64 $OPENCL_LIBS";
+		fi
+		CFLAGS="$CFLAGS $OPENCL_FLAGS";
+		LDFLAGS="$LDFLAGS $OPENCL_LIBS";
 	fi
 fi
 

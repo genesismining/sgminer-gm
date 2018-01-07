@@ -68,7 +68,7 @@ typedef struct {
   sph_shabal512_context   shabal1;
 } Xhash_context_holder;
 
-static Xhash_context_holder base_contexts;
+extern Xhash_context_holder base_contexts;
 
 void init_X14hash_contexts()
 {

@@ -2011,8 +2011,8 @@ bool parse_notify_cn(struct pool *pool, json_t *val)
     goto out;
   }
   
-  job_id = json_string_value(jid);
-  hex2bin(&XMRTarget, json_string_value(target), 4);
+  job_id = (char *const)json_string_value(jid);
+  hex2bin((unsigned char *)&XMRTarget, json_string_value(target), 4);
 
   cg_wlock(&pool->data_lock);
   

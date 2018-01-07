@@ -34,6 +34,12 @@
 #include "events.h"
 #include "config_parser.h"
 
+static inline void ignore_result_helper(int __attribute__((unused)) dummy,
+                                        ...) {}
+
+#define IGNORE_RESULT(X) ignore_result_helper(0, (X))
+
+
 // global event list
 event_t *events = NULL, *last_event = NULL;
 
@@ -45,7 +51,7 @@ static void *cmd_thread(void *cmdp)
 	const char *cmd = (const char*)cmdp;
 
 	applog(LOG_DEBUG, "Executing command: %s", cmd);
-	system(cmd);
+	IGNORE_RESULT(system(cmd));
 
 	return NULL;
 }
@@ -265,6 +271,6 @@ void event_notify(const char *event_type)
 
   // quit sgminer if set
   if (event->quit == true)
-    quit(0, ((empty_string(event->quit_msg))?event_type:event->quit_msg));
+    quit(0, "%s", ((empty_string(event->quit_msg))?event_type:event->quit_msg));
 
 }

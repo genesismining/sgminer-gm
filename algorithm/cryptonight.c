@@ -148,7 +148,7 @@ static inline uint64_t mul128(uint64_t a, uint64_t b, uint64_t* product_hi)
 #define BYTE(x, y)		(((x) >> ((y) << 3)) & 0xFF)
 #define ROTL32(x, y)	(((x) << (y)) | ((x) >> (32 - (y))))
 
-void CNAESRnd(uint32_t *X, const uint32_t *key)
+void CNAESRnd(uint64_t *X, const uint32_t *key)
 {
 	uint32_t Y[4];
 	
@@ -160,7 +160,7 @@ void CNAESRnd(uint32_t *X, const uint32_t *key)
 	for(int i = 0; i < 4; ++i) X[i] = Y[i] ^ key[i];
 }
 
-void CNAESTransform(uint32_t *X, const uint32_t *Key)
+void CNAESTransform(uint64_t *X, const uint32_t *Key)
 {
 	for(int i = 0; i < 10; ++i)
 	{
@@ -184,13 +184,13 @@ void AESExpandKey256(uint32_t *keybuf)
 	}
 }
 
-void cryptonight(uint8_t *Output, uint8_t *Input, uint32_t Length)
+void cryptonight(uint32_t *Output, uint32_t *Input, uint32_t Length)
 {
 	CryptonightCtx CNCtx;
 	uint64_t text[16], a[2], b[2];
 	uint32_t ExpandedKey1[64], ExpandedKey2[64];
 	
-	CNKeccak(CNCtx.State, Input, Length);
+	CNKeccak(CNCtx.State, ((uint64_t *)Input), Length);
 	
 	for(int i = 0; i < 4; ++i) ((uint64_t *)ExpandedKey1)[i] = CNCtx.State[i];
 	for(int i = 0; i < 4; ++i) ((uint64_t *)ExpandedKey2)[i] = CNCtx.State[i + 4];
@@ -220,7 +220,7 @@ void cryptonight(uint8_t *Output, uint8_t *Input, uint32_t Length)
 		uint64_t c[2];
 		memcpy(c, CNCtx.Scratchpad + ((a[0] & 0x1FFFF0) >> 3), 16);
 		
-		CNAESRnd(c, a);
+		CNAESRnd(c, ((uint32_t *)a));
 		
 		b[0] ^= c[0];
 		b[1] ^= c[1];
@@ -309,7 +309,7 @@ void cryptonight_regenhash(struct work *work)
 		
 	cryptonight(ohash, data, work->XMRBlobLen);
 	
-	char *tmpdbg = bin2hex(ohash, 32);
+	char *tmpdbg = bin2hex(((const char *)ohash), 32);
 	
 	applog(LOG_DEBUG, "cryptonight_regenhash: %s\n", tmpdbg);
 	

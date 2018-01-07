@@ -29,7 +29,7 @@ uint32_t EthCalcEpochNumber(uint8_t *SeedHash)
   uint8_t TestSeedHash[32] = { 0 };
   
   for(int Epoch = 0; Epoch < 2048; ++Epoch) {
-    SHA3_256((struct ethash_h256 *)TestSeedHash, TestSeedHash, 32);
+    SHA3_256(((struct ethash_h256 *)TestSeedHash), TestSeedHash, 32);
     if(!memcmp(TestSeedHash, SeedHash, 32)) return(Epoch + 1);
   }
   

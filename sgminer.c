@@ -346,6 +346,11 @@ struct schedtime schedstart;
 struct schedtime schedstop;
 bool sched_paused;
 
+static inline void ignore_result_helper(int __attribute__((unused)) dummy,
+                                        ...) {}
+
+#define IGNORE_RESULT(X) ignore_result_helper(0, (X))
+
 static void set_current_pool(struct pool *pool) {
   applog(LOG_DEBUG, "Trying to set current pool...");
   bool free_dag = (currentpool != NULL && currentpool->algorithm.type == ALGO_ETHASH && pool->algorithm.type != ALGO_ETHASH);
@@ -3329,7 +3334,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, char *curl_err_s
 	  uint64_t tmp = bswap_64(work->Nonce);
 	  char *ASCIIMixHash = bin2hex(work->mixhash, 32);
 	  char *ASCIIPoWHash = bin2hex(work->data, 32);
-	  char *ASCIINonce = bin2hex(&tmp, 8);
+  	  char *ASCIINonce = bin2hex(((const unsigned char *)&tmp), 8);
 
 	  snprintf(s, 128 + 16 + 512, "{\"jsonrpc\":\"2.0\", \"method\":\"eth_submitWork\", \"params\":[\"0x%s\", \"0x%s\", \"0x%s\"],\"id\":1}", ASCIINonce, ASCIIPoWHash, ASCIIMixHash);
 
@@ -6028,8 +6033,7 @@ static void *stratum_sthread(void *userdata)
       uint64_t tmp = bswap_64(work->Nonce);
       char *ASCIIMixHash = bin2hex(work->mixhash, 32);
       char *ASCIIPoWHash = bin2hex(work->data, 32);
-      char *ASCIINonce = bin2hex(&tmp, 8);
-
+      char *ASCIINonce = bin2hex(((const unsigned char *)&tmp), 8);
       mutex_lock(&sshare_lock);
       /* Give the stratum share a unique id */
       sshare->id = swork_id++;
@@ -6050,7 +6054,8 @@ static void *stratum_sthread(void *userdata)
 
       applog(LOG_DEBUG, "stratum_sthread() algorithm = %s", pool->algorithm.name);
 		
-      char *ASCIINonce = bin2hex(&work->XMRNonce, 4);
+
+      char *ASCIINonce = bin2hex(((const unsigned char *)&work->XMRNonce), 4);
       
       ASCIIResult = bin2hex(work->hash, 32);
        
@@ -9200,8 +9205,8 @@ int main(int argc, char *argv[])
   int fd = open("/dev/urandom", O_RDONLY);
   if (fd < 0)
     fd = open("/dev/random", O_RDONLY);
-  read(fd, &eth_nonce, 4);
-  read(fd, entropy, sizeof(entropy));
+  IGNORE_RESULT(read(fd, &eth_nonce, 4));
+  IGNORE_RESULT(read(fd, entropy, sizeof(entropy)));
   close(fd);
 #endif
   mutex_init(&hash_lock);

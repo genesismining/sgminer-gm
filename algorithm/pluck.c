@@ -215,7 +215,7 @@ static inline uint32_t be32dec(const void *pp)
 }
 #define ROTL(a, b) (((a) << (b)) | ((a) >> (32 - (b))))
 //note, this is 64 bytes
-static inline void xor_salsa8(uint32_t B[16], const uint32_t Bx[16])
+inline void xor_salsa8(uint32_t B[16], const uint32_t Bx[16])
 {
 #define ROTL(a, b) (((a) << (b)) | ((a) >> (32 - (b))))
 	uint32_t x00, x01, x02, x03, x04, x05, x06, x07, x08, x09, x10, x11, x12, x13, x14, x15;
@@ -331,7 +331,7 @@ void sha256_hash512(unsigned char *hash, const unsigned char *data)
 		be32enc((uint32_t *)hash + i, S[i]);
 }
 
-inline void pluckrehash(void *state, const void *input)
+static void pluckrehash(void *state, const void *input)
 {
 
 	int i,j;

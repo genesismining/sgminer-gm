@@ -70,10 +70,9 @@ typedef struct {
     sph_whirlpool_context   whirlpool1;
 } Xhash_context_holder;
 
-static Xhash_context_holder base_contexts;
+extern Xhash_context_holder base_contexts;
 
-
-void init_Bhash_contexts()
+static void init_Bhash_contexts()
 {
     sph_blake512_init(&base_contexts.blake1);
     sph_bmw512_init(&base_contexts.bmw1);
@@ -96,7 +95,7 @@ void init_Bhash_contexts()
  * Encode a length len/4 vector of (uint32_t) into a length len vector of
  * (unsigned char) in big-endian form.  Assumes len is a multiple of 4.
  */
-static inline void
+inline void
 be32enc_vect(uint32_t *dst, const uint32_t *src, uint32_t len)
 {
     uint32_t i;
@@ -106,10 +105,7 @@ be32enc_vect(uint32_t *dst, const uint32_t *src, uint32_t len)
 }
 
 
-#ifdef __APPLE_CC__
-static
-#endif
-inline void bitblockhash(void *state, const void *input)
+static void bitblockhash(void *state, const void *input)
 {
     init_Bhash_contexts();
 

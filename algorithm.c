@@ -43,6 +43,7 @@
 #include "algorithm/ethash.h"
 #include "algorithm/cryptonight.h"
 #include "algorithm/equihash.h"
+#include "algorithm/skeincoin.h"
 
 #include "compat.h"
 
@@ -77,7 +78,8 @@ const char *algorithm_type_str[] = {
   "Vanilla",
   "Ethash",
   "Cryptonight",
-  "Equihash"
+  "Equihash",
+  "Skeincoin"
 };
 
 void sha256(const unsigned char *message, unsigned int len, unsigned char *digest)
@@ -288,31 +290,31 @@ static cl_int queue_yescrypt_multikernel(_clState *clState, dev_blk_ctx *blk, __
   CL_SET_ARG(le_target);
 
 //inactive kernel
-  num = 0;
+// num = 0;
   kernel = clState->extra_kernels;
   CL_SET_ARG_N(0,clState->buffer1);
   CL_SET_ARG_N(1,clState->buffer2);
 //  CL_SET_ARG_N(3, clState->buffer3);
 
 //mix2_2
-  num = 0;
+//  num = 0;
   CL_NEXTKERNEL_SET_ARG_N(0, clState->padbuffer8);
   CL_SET_ARG_N(1,clState->buffer1);
   CL_SET_ARG_N(2,clState->buffer2);
   //mix2_2
 //inactive kernel
-  num = 0;
+ // num = 0;
   CL_NEXTKERNEL_SET_ARG_N(0, clState->buffer1);
   CL_SET_ARG_N(1, clState->buffer2);
   //mix2_2
 
-  num = 0;
+ // num = 0;
   CL_NEXTKERNEL_SET_ARG_N(0, clState->padbuffer8);
   CL_SET_ARG_N(1, clState->buffer1);
   CL_SET_ARG_N(2, clState->buffer2);
 
   //inactive kernel
-  num = 0;
+  //num = 0;
   CL_NEXTKERNEL_SET_ARG_N(0, clState->buffer1);
   CL_SET_ARG_N(1, clState->buffer2);
   //mix2_2
@@ -894,17 +896,17 @@ static cl_int queue_lyra2rev2_kernel(struct __clState *clState, struct _dev_blk_
   kernel = clState->extra_kernels;
   CL_SET_ARG_0(clState->buffer1);
   // cubehash - search2
-  num = 0;
+  //num = 0;
   CL_NEXTKERNEL_SET_ARG_0(clState->buffer1);
   // lyra - search3
-  num = 0;
+  //num = 0;
   CL_NEXTKERNEL_SET_ARG_N(0, clState->buffer1);
   CL_SET_ARG_N(1, clState->padbuffer8);
   // skein -search4
-  num = 0;
+  //num = 0;
   CL_NEXTKERNEL_SET_ARG_0(clState->buffer1);
   // cubehash - search5
-  num = 0;
+  //num = 0;
   CL_NEXTKERNEL_SET_ARG_0(clState->buffer1);
   // bmw - search6
   num = 0;
@@ -1094,7 +1096,7 @@ static cl_int queue_cryptonight_kernel(_clState *clState, dev_blk_ctx *blk, __ma
 	cl_kernel *kernel = &clState->kernel;
 	unsigned int num = 0;
 	cl_int status = 0, tgt32 = (blk->work->XMRTarget);
-	cl_ulong le_target = ((cl_ulong)(blk->work->XMRTarget));
+	__maybe_unused cl_ulong le_target = ((cl_ulong)(blk->work->XMRTarget));
 
 	//le_target = *(cl_ulong *)(blk->work->device_target + 24);
 	memcpy(clState->cldata, blk->work->data, blk->work->XMRBlobLen);
@@ -1202,6 +1204,24 @@ static cl_int queue_equihash_kernel(_clState *clState, dev_blk_ctx *blk, __maybe
 }
 #undef WORKSIZE
 
+static cl_int queue_skeincoin_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_unused cl_uint threads)
+{
+  cl_kernel *kernel = &clState->kernel;
+  unsigned int num = 0;
+  cl_int status = 0;
+  int i;
+  for (i = 0; i < 8; i++) {
+    status |= clSetKernelArg(*kernel, num++, sizeof(cl_ulong), blk->ulongMidstate + i);
+  }
+  for (i = 0; i < 3; i++) {
+    status |= clSetKernelArg(*kernel, num++, sizeof(cl_uint), blk->ulongData + i);
+  }
+  CL_SET_ARG(clState->outputBuffer);
+
+  return status;
+}
+
+
 
 static algorithm_settings_t algos[] = {
   // kernels starting from this will have difficulty calculated by using litecoin algorithm
@@ -1300,9 +1320,8 @@ static algorithm_settings_t algos[] = {
   { "ethash-new",     ALGO_ETHASH,   "", 1, 1, 1, 0, 0, 0xFF, 0xFFFF000000000000ULL, 0x000000FFUL, 0, 128, 0, ethash_regenhash, NULL, queue_ethash_kernel, gen_hash, append_ethash_compiler_options },
 
   { "cryptonight", ALGO_CRYPTONIGHT, "", (1ULL << 32), (1ULL << 32), (1ULL << 32), 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 6, 0, 0, cryptonight_regenhash, NULL, queue_cryptonight_kernel, gen_hash, NULL },
-  
   { "equihash",     ALGO_EQUIHASH,   "", 1, (1ULL << 28), (1ULL << 28), 0, 0, 0x20000, 0xFFFF000000000000ULL, 0x00000000UL, 0, 128, 0, equihash_regenhash, NULL, queue_equihash_kernel, gen_hash, append_equihash_compiler_options },
-  
+  { "skeincoin", ALGO_SKEINCOIN, "", 1, 1, 1, 0, 0, 0xFF, 0xFFFFULL, 0x000000ffUL, 0, 128, CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, skeincoin_regenhash, skeincoin_prepare_work, queue_skeincoin_kernel, gen_hash, NULL },
   // Terminator (do not remove)
   { NULL, ALGO_UNK, "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL }
 };
@@ -1380,6 +1399,7 @@ static const char *lookup_algorithm_alias(const char *lookup_alias, uint8_t *nfa
   ALGO_ALIAS("blakecoin", "blake256r8");
   ALGO_ALIAS("blake", "blake256r14");
   ALGO_ALIAS("zcash", "equihash");
+  ALGO_ALIAS("skein", "skeincoin");
 
 #undef ALGO_ALIAS
 #undef ALGO_ALIAS_NF
