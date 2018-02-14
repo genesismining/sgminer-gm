@@ -14,7 +14,7 @@ cpuminer by Jeff Garzik (jgarzik).
 
 **bugtracker**: https://github.com/sgminer-dev/sgminer/issues
 
-**irc**: `#sgminer` and `#sgminer-dev` on freenode
+**irc**: `#sgminer` and `#sgminer-dev` on [freenode](https://freenode.net/)
 
 **mailing lists**: https://sourceforge.net/p/sgminer/mailman/
 
@@ -51,12 +51,12 @@ Mandatory:
 * [curl dev library](http://curl.haxx.se/libcurl/) - `libcurl4-openssl-dev` on Debian
 * [pkg-config](http://www.freedesktop.org/wiki/Software/pkg-config)
 * [libtool](http://www.gnu.org/software/libtool/)
-* [AMD APP SDK](http://developer.amd.com/tools-and-sdks/heterogeneous-computing/amd-accelerated-parallel-processing-app-sdk/downloads/)	- available under various names as a package on different GNU/Linux distributions
+* [AMD APP SDK](http://developer.amd.com/amd-accelerated-parallel-processing-app-sdk/)	- available under various names as a package on different GNU/Linux distributions
 
 Optional:
 
-* curses dev library - `libncurses5-dev` on Debian or `libpdcurses` on WIN32, for text user interface
-* [AMD ADL SDK](http://developer.amd.com/tools-and-sdks/graphics-development/display-library-adl-sdk/) - version 6, required for ATI GPU monitoring & clocking
+* [curses](http://www.gnu.org/software/ncurses/) dev library - `libncurses5-dev` on Debian or `libpdcurses` on WIN32, for text user interface
+* [AMD ADL SDK](http://developer.amd.com/display-library-adl-sdk/) - version 6, required for ATI GPU monitoring & clocking
 
 If building from git:
 
