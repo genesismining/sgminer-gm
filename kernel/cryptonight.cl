@@ -7,10 +7,12 @@
 #include "blake256.cl"
 #include "groestl256.cl"
 
+#define VARIANT0_PARAMS
 #define VARIANT0_1(p)
 #define VARIANT0_2(p)
 #define VARIANT0_INIT()
 
+#define VARIANT1_PARAMS , __global ulong *input
 #define VARIANT1_1(p) \
   do \
   { \
@@ -20,13 +22,14 @@
   } while(0)
 
 #define VARIANT1_2(p) \
-  do \
-  { \
-    (p).s2 ^= get_global_id(0); \
-  } while(0)
+    (p) ^= tweak1_2
 
-#define VARIANT1_INIT()
-
+#define VARIANT1_INIT() \
+    uint2 tweak1_2 = as_uint2(input[4]); \
+    tweak1_2.s0 >>= 24; \
+    tweak1_2.s0 |= tweak1_2.s1 << 8; \
+    tweak1_2.s1 = get_global_id(0); \
+    tweak1_2 ^= as_uint2(states[24]);
 
 static const __constant ulong keccakf_rndc[24] = 
 {
@@ -263,7 +266,7 @@ __kernel void search(__global ulong *input, uint InputLen, __global uint4 *Scrat
 	keccakf1600_2(State);
 	
 	mem_fence(CLK_GLOBAL_MEM_FENCE);
-	
+
 	#pragma unroll
 	for(int i = 0; i < 25; ++i) states[i] = State[i];
 	
@@ -289,15 +292,15 @@ __kernel void search(__global ulong *input, uint InputLen, __global uint4 *Scrat
 
 #define SEARCH1(VAR) \
 __attribute__((reqd_work_group_size(WORKSIZE, 1, 1))) \
-__kernel void search1_var##VAR(__global uint4 *Scratchpad, __global ulong *states) \
+__kernel void search1_var##VAR(__global uint4 *Scratchpad, __global ulong *states VARIANT##VAR##_PARAMS ) \
 { \
 	uint4 a, b; \
 	__local uint AES0[256], AES1[256], AES2[256], AES3[256]; \
 	\
-	VARIANT##VAR##_INIT(); \
-	\
 	Scratchpad += ((get_global_id(0) - get_global_offset(0))); \
 	states += (25 * (get_global_id(0) - get_global_offset(0))); \
+	\
+	VARIANT##VAR##_INIT(); \
 	\
 	for(int i = get_local_id(0); i < 256; i += WORKSIZE) \
 	{ \
@@ -325,8 +328,10 @@ __kernel void search1_var##VAR(__global uint4 *Scratchpad, __global ulong *state
 		c = Scratchpad[IDX((as_ulong(a.s01) & 0x1FFFF0) >> 4)]; \
 		c = AES_Round(AES0, AES1, AES2, AES3, c, a); \
 		\
-		Scratchpad[IDX((as_ulong(a.s01) & 0x1FFFF0) >> 4)] = b_x ^ c; \
-		VARIANT##VAR##_1(Scratchpad[IDX((as_ulong(a.s01) & 0x1FFFF0) >> 4)]); \
+		b_x ^= c; \
+		VARIANT##VAR##_1(b_x); \
+		\
+		Scratchpad[IDX((as_ulong(a.s01) & 0x1FFFF0) >> 4)] = b_x; \
 		\
 		uint4 tmp; \
 		tmp = Scratchpad[IDX((as_ulong(c.s01) & 0x1FFFF0) >> 4)]; \
@@ -334,8 +339,9 @@ __kernel void search1_var##VAR(__global uint4 *Scratchpad, __global ulong *state
 		a.s23 = as_uint2(as_ulong(a.s23) +        as_ulong(c.s01) * as_ulong(tmp.s01)); \
 		a.s01 = as_uint2(as_ulong(a.s01) + mul_hi(as_ulong(c.s01),  as_ulong(tmp.s01))); \
 		\
+		VARIANT##VAR##_2(a.s23); \
 		Scratchpad[IDX((as_ulong(c.s01) & 0x1FFFF0) >> 4)] = a; \
-		VARIANT##VAR##_2(Scratchpad[IDX((as_ulong(c.s01) & 0x1FFFF0) >> 4)]); \
+		VARIANT##VAR##_2(a.s23); \
 		\
 		a ^= tmp; \
 		\

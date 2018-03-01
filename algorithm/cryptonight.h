@@ -7,7 +7,7 @@ typedef struct _CryptonightCtx
   uint64_t Scratchpad[1 << 18];
 } CryptonightCtx;
 
-inline int monero_variant(struct work *work) {
+static inline int monero_variant(struct work *work) {
   return (work->is_monero && work->data[0] >= 7) ? work->data[0] - 6 : 0;
 }
 

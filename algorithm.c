@@ -1124,6 +1124,8 @@ static cl_int queue_cryptonight_kernel(_clState *clState, dev_blk_ctx *blk, __ma
   kernel = clState->extra_kernels;
   CL_SET_ARG(clState->Scratchpads);
   CL_SET_ARG(clState->States);
+  if (variant > 0)
+    CL_SET_ARG(clState->CLbuffer0);
   
   num = 0;
   CL_NEXTKERNEL_SET_ARG(clState->Scratchpads);

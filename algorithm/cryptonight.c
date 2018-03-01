@@ -14,26 +14,27 @@
 #include "algorithm/cn-aes-tbls.h"
 
 #define VARIANT1_1(p) \
-  do if (Variant > 0) \
-  { \
-    const uint8_t tmp = ((const uint8_t*)(p))[11]; \
-    static const uint32_t table = 0x75310; \
-    const uint8_t index = (((tmp >> 3) & 6) | (tmp & 1)) << 1; \
-    ((uint8_t*)(p))[11] = tmp ^ ((table >> index) & 0x30); \
-  } while(0)
+	do if (Variant > 0) \
+	{ \
+		const uint8_t tmp = ((p) >> 24) & 0xff; \
+		static const uint32_t table = 0x75310; \
+		const uint8_t index = (((tmp >> 3) & 6) | (tmp & 1)) << 1; \
+		(p) &= 0xffffffff00ffffffULL; \
+		(p) |= (tmp ^ ((table >> index) & 0x30)) << 24; \
+	} while(0)
 
 #define VARIANT1_2(p) \
-  do \
-  { \
-    ((uint32_t*)(p))[2] ^= nonce; \
-  } while(0)
+	do if (Variant > 0) \
+	{ \
+		(p) ^= tweak1_2; \
+	} while(0)
 
 #define VARIANT1_INIT() \
-  if (Variant > 0 && Length < 43) \
-  { \
-    quit(1, "Cryptonight variants need at least 43 bytes of data"); \
-  } \
-  const uint32_t nonce = Variant > 0 ? *(uint32_t*)(Input + 39) : 0
+	if (Variant > 0 && Length < 43) \
+	{ \
+		quit(1, "Cryptonight variants need at least 43 bytes of data"); \
+	} \
+	const uint64_t tweak1_2 = Variant > 0 ? *(uint64_t*)(Input + 35) ^ CNCtx.State[24] : 0
 
 
 static const uint64_t keccakf_rndc[24] = 
@@ -213,9 +214,9 @@ void cryptonight(uint8_t *Output, uint8_t *Input, uint32_t Length, int Variant)
 	uint64_t text[16], a[2], b[2];
 	uint32_t ExpandedKey1[64], ExpandedKey2[64];
 	
-	VARIANT1_INIT();
-
 	CNKeccak(CNCtx.State, Input, Length);
+
+	VARIANT1_INIT();
 	
 	for(int i = 0; i < 4; ++i) ((uint64_t *)ExpandedKey1)[i] = CNCtx.State[i];
 	for(int i = 0; i < 4; ++i) ((uint64_t *)ExpandedKey2)[i] = CNCtx.State[i + 4];
@@ -250,8 +251,8 @@ void cryptonight(uint8_t *Output, uint8_t *Input, uint32_t Length, int Variant)
 		b[0] ^= c[0];
 		b[1] ^= c[1];
 		
+		VARIANT1_1(b[1]);
 		memcpy(CNCtx.Scratchpad + ((a[0] & 0x1FFFF0) >> 3), b, 16);
-		VARIANT1_1(CNCtx.Scratchpad + ((a[0] & 0x1FFFF0) >> 3));
 		
 		memcpy(b, CNCtx.Scratchpad + ((c[0] & 0x1FFFF0) >> 3), 16);
 		
@@ -260,8 +261,9 @@ void cryptonight(uint8_t *Output, uint8_t *Input, uint32_t Length, int Variant)
 		a[1] += mul128(c[0], b[0], &hi);
 		a[0] += hi;
 		
+		VARIANT1_2(a[1]);
 		memcpy(CNCtx.Scratchpad + ((c[0] & 0x1FFFF0) >> 3), a, 16);
-		VARIANT1_2(CNCtx.Scratchpad + ((c[0] & 0x1FFFF0) >> 3));
+		VARIANT1_2(a[1]);
 		
 		a[0] ^= b[0];
 		a[1] ^= b[1];
