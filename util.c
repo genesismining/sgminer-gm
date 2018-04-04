@@ -1002,7 +1002,21 @@ void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res)
 }
 #endif /* WIN32 */
 
-#ifdef CLOCK_MONOTONIC /* Essentially just linux */
+#ifdef __MACH__
+#include <mach/clock.h>
+#include <mach/mach.h>
+void cgtimer_time(cgtimer_t *ts_start)
+{
+  clock_serv_t cclock;
+  mach_timespec_t mts;
+
+  host_get_clock_service(mach_host_self(), SYSTEM_CLOCK, &cclock);
+  clock_get_time(cclock, &mts);
+  mach_port_deallocate(mach_task_self(), cclock);
+  ts_start->tv_sec = mts.tv_sec;
+  ts_start->tv_nsec = mts.tv_nsec;
+}
+#elif defined(CLOCK_MONOTONIC) /* Essentially just linux */
 void cgtimer_time(cgtimer_t *ts_start)
 {
   clock_gettime(CLOCK_MONOTONIC, ts_start);
@@ -1037,21 +1051,7 @@ void cgsleep_us_r(cgtimer_t *ts_start, int64_t us)
   timeraddspec(&ts_end, ts_start);
   nanosleep_abstime(&ts_end);
 }
-#else /* CLOCK_MONOTONIC */
-#ifdef __MACH__
-#include <mach/clock.h>
-#include <mach/mach.h>
-void cgtimer_time(cgtimer_t *ts_start)
-{
-  clock_serv_t cclock;
-  mach_timespec_t mts;
 
-  host_get_clock_service(mach_host_self(), SYSTEM_CLOCK, &cclock);
-  clock_get_time(cclock, &mts);
-  mach_port_deallocate(mach_task_self(), cclock);
-  ts_start->tv_sec = mts.tv_sec;
-  ts_start->tv_nsec = mts.tv_nsec;
-}
 #elif !defined(WIN32) /* __MACH__ - Everything not linux/macosx/win32 */
 void cgtimer_time(cgtimer_t *ts_start)
 {
@@ -1160,7 +1160,6 @@ void cgsleep_us_r(cgtimer_t *ts_start, int64_t us)
   cgsleep_spec(&ts_diff, ts_start);
 }
 #endif /* WIN32 */
-#endif /* CLOCK_MONOTONIC */
 
 void cgsleep_ms(int ms)
 {
