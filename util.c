@@ -1131,7 +1131,7 @@ void cgsleep_us_r(cgtimer_t *ts_start, int64_t us)
     ms = 1;
   liSleep(&li, ms);
 }
-#else /* WIN32 */
+#elif defined(__MACH__) /* WIN32 */
 static void cgsleep_spec(struct timespec *ts_diff, const struct timespec *ts_start)
 {
   struct timespec now;
