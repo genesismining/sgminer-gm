@@ -1414,12 +1414,6 @@ void set_algorithm(algorithm_t* algo, const char* newname_alias)
 {
   const char *newname;
 
-  //load previous cryptonight version value if any
-  uint8_t old_cn_version = ((algo->cryptonight_version) ? algo->cryptonight_version : 0);
-
-  //load previous algorithm nfactor in case nfactor was applied before algorithm... or default to 10
-  uint8_t old_nfactor = ((algo->nfactor) ? algo->nfactor : 0);
-
   //load previous kernel file name if was applied before algorithm...
   const char *kernelfile = algo->kernelfile;
 
@@ -1431,21 +1425,32 @@ void set_algorithm(algorithm_t* algo, const char* newname_alias)
 
   copy_algorithm_settings(algo, newname);
 
-  //set nfactor
-  uint8_t nfactor;
+  //nfactor param
+  if (algo->type == ALGO_SCRYPT || algo->type == ALGO_NSCRYPT) {
+    //load previous algorithm nfactor in case nfactor was applied before algorithm... or default to 10
+    uint8_t old_nfactor = ((algo->nfactor) ? algo->nfactor : 0);
+    uint8_t nfactor;
 
-  //set default nfactor version if not returned by alias lookup
-  if (param == 0) {
-    param = 10;
+    //set default nfactor version if not returned by alias lookup
+    if (param == 0) {
+      param = 10;
+    }
+
+    //use old nfactor if it was previously set and is different than the one set by alias
+    nfactor = (((old_nfactor > 0) && (old_nfactor != param)) ? old_nfactor : param );
+
+    set_algorithm_nfactor(algo, nfactor);
+  }
+  //anything else set n=1024 which is used for TC calc in ocl.c
+  else {
+    algo->nfactor = 0;
+    algo->n = 1024;
   }
 
-  //use old nfactor if it was previously set and is different than the one set by alias
-  nfactor = (((old_nfactor > 0) && (old_nfactor != param)) ? old_nfactor : param );
-
-  set_algorithm_nfactor(algo, nfactor);
-
-  //cryptonight version
+  //cryptonight version param
   if (algo->type == ALGO_CRYPTONIGHT) {
+    //load previous cryptonight version value if any
+    uint8_t old_cn_version = ((algo->cryptonight_version) ? algo->cryptonight_version : 0);
     uint8_t cryptonight_version;
 
     //set default cryptonight version if not returned by alias lookup
@@ -1494,5 +1499,6 @@ void set_algorithm_nfactor(algorithm_t* algo, const uint8_t nfactor)
 
 bool cmp_algorithm(const algorithm_t* algo1, const algorithm_t* algo2)
 {
-  return (!safe_cmp(algo1->name, algo2->name) && !safe_cmp(algo1->kernelfile, algo2->kernelfile) && (algo1->nfactor == algo2->nfactor) && (algo1->cryptonight_version == algo2->cryptonight_version));
+  return (!safe_cmp(algo1->name, algo2->name) && !safe_cmp(algo1->kernelfile, algo2->kernelfile) && 
+    (algo1->nfactor == algo2->nfactor) && (algo1->cryptonight_version == algo2->cryptonight_version));
 }
