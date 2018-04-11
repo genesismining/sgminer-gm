@@ -3,7 +3,7 @@
 m4_define([v_maj], [5])
 m4_define([v_min], [5])
 m4_define([v_mic], [6])
-m4_define([v_rev], [gm])
+m4_define([v_rev], [gm-ethos1])
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_ifdef([v_rev], [m4_define([v_ver], [v_maj.v_min.v_mic-v_rev])], [m4_define([v_ver], [v_maj.v_min.v_mic])])
 m4_define([lt_rev], m4_eval(v_maj + v_min))

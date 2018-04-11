@@ -1187,16 +1187,6 @@ static char *set_extranonce_subscribe(char *arg)
   return NULL;
 }
 
-static char *set_monero(char *arg)
-{
-  struct pool *pool = get_current_pool();
-
-  applog(LOG_DEBUG, "Select appropriate Cryptonight Monero variant on %d", pool->pool_no);
-  opt_set_bool(&pool->is_monero);
-
-  return NULL;
-}
-
 static char *set_pool_priority(char *arg)
 {
   struct pool *pool = get_current_pool();
@@ -1543,9 +1533,6 @@ struct opt_table opt_config_table[] = {
   OPT_WITHOUT_ARG("--hamsi-short",
       opt_set_bool, &opt_hamsi_short,
       "Set SPH_HAMSI_SHORT for X13 derived algorithms (Can give better hashrate for some GPUs)"),
-  OPT_WITHOUT_ARG("--monero|--pool-monero",
-      set_monero, NULL,
-      "Use Monero Cryptonight variants as appropriate"),
   OPT_WITH_ARG("--keccak-unroll",
       set_int_0_to_9999, opt_show_intval, &opt_keccak_unroll,
       "Set SPH_KECCAK_UNROLL for Xn derived algorithms (Default: 0)"),
@@ -6619,7 +6606,7 @@ static void gen_stratum_work_cn(struct pool *pool, struct work *work)
   work->sdiff = pool->swork.diff;
   work->work_difficulty = work->sdiff;
   work->network_diff = pool->diff1;
-  work->is_monero = pool->is_monero;
+  work->cryptonight_version = pool->algorithm.cryptonight_version;
   cg_runlock(&pool->data_lock);
   
   local_work++;

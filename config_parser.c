@@ -1327,9 +1327,6 @@ static json_t *build_pool_json()
     if (pool->no_keepalive)
       json_pool_add(obj, "no-keepalive", json_true(), pool->pool_no);
 
-    if (pool->is_monero)
-      json_pool_add(obj, "monero", json_true(), pool->pool_no);
-
     if (!empty_string(pool->description))
       json_pool_add(obj, "no-description", json_string(pool->description), pool->pool_no);
 

@@ -35,7 +35,7 @@ typedef struct __clState {
   bool goffset;
   cl_uint vwidth;
   int devid;
-  int monero_variant;
+  int cryptonight_variant;
   size_t max_work_size;
   size_t wsize;
   size_t compute_shaders;

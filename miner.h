@@ -1371,7 +1371,6 @@ struct pool {
   uint8_t XMRBlob[128];
   pthread_mutex_t XMRGlobalNonceLock;
   uint32_t XMRGlobalNonce;
-  bool is_monero;
   
   double diff_accepted;
   double diff_rejected;
@@ -1531,7 +1530,7 @@ struct work {
   
   /* cryptonight stuff */
   uint32_t XMRBlobLen;
-  bool is_monero;
+  uint8_t cryptonight_version;
   
   unsigned char equihash_data[1487];
 
