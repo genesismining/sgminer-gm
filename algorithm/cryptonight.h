@@ -7,8 +7,8 @@ typedef struct _CryptonightCtx
   uint64_t Scratchpad[1 << 18];
 } CryptonightCtx;
 
-static inline int monero_variant(struct work *work) {
-  return (work->is_monero && work->data[0] >= 7) ? work->data[0] - 6 : 0;
+static inline int cryptonight_variant(struct work *work) {
+  return (((work->cryptonight_version > 1) && (((uint8_t *)work->data)[0] >= work->cryptonight_version)) ? ((uint8_t *)work->data)[0] - work->cryptonight_version + 1 : 0 );
 }
 
 void cryptonight_regenhash(struct work *work);

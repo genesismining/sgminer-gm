@@ -446,7 +446,6 @@ sgminer 4.2.1-116-g2e8b-dirty
   * [gpu-vddc](#gpu-vddc)
   * [intensity](#intensity)
   * [lookup-gap](#lookup-gap)
-  * [monero](#monero)
   * [name](#pool-name)
   * [nfactor](#nfactor)
   * [no-keepalive](#no-keepalive)
@@ -1429,22 +1428,6 @@ See [intensity](#intensity)
 ### [pool-]lookup-gap
 
 See [lookup-gap](#lookup-gap)
-
-[Top](#configuration-and-command-line-options) :: [Config-file and CLI options](#config-file-and-cli-options) :: [Pool Options](#pool-options)
-
-### monero
-
-This flag is required for Monero mining after the hard fork in March 2018. When it is set then the appropriate Cryptonight variant for Monero is chosen automatically.
-
-*Available*: Global, Pool
-
-*Config File Syntax:* `"monero":true`
-
-*Command Line Syntax:* `--monero` `--pool-monero`
-
-*Argument:* None
-
-*Default:* `false`
 
 [Top](#configuration-and-command-line-options) :: [Config-file and CLI options](#config-file-and-cli-options) :: [Pool Options](#pool-options)
 

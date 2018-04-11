@@ -1096,9 +1096,9 @@ static cl_int queue_cryptonight_kernel(_clState *clState, dev_blk_ctx *blk, __ma
   unsigned int num = 0;
   cl_int status = 0, tgt32 = *(uint32_t*)(blk->work->target + 28);
 
-  int variant = MIN(1, monero_variant(blk->work)); // limit variant to prevent DOS
-  if (variant != clState->monero_variant) {
-    applog(LOG_NOTICE, "switch to monero variant %d", variant);
+  int variant = cryptonight_variant(blk->work);
+  if (variant != clState->cryptonight_variant) {
+    applog(LOG_NOTICE, "Using cryptonight variant %d", variant);
     char kernel_name[20] = "search1";
     if (variant > 0)
       snprintf(kernel_name + 7, sizeof(kernel_name) - 7, "_var%d", variant);
@@ -1108,7 +1108,7 @@ static cl_int queue_cryptonight_kernel(_clState *clState, dev_blk_ctx *blk, __ma
       applog(LOG_ERR, "Error %d: Creating Kernel \"%s\" from program. (clCreateKernel)", kernel_name, status);
       return status;
     }
-    clState->monero_variant = variant;
+    clState->cryptonight_variant = variant;
   }
 
   memcpy(clState->cldata, blk->work->data, blk->work->XMRBlobLen);
@@ -1364,20 +1364,27 @@ void copy_algorithm_settings(algorithm_t* dest, const char* algo)
   }
 }
 
-static const char *lookup_algorithm_alias(const char *lookup_alias, uint8_t *nfactor)
+static const char *lookup_algorithm_alias(const char *lookup_alias, uint8_t *param)
 {
-#define ALGO_ALIAS_NF(alias, name, nf) \
-  if (strcasecmp(alias, lookup_alias) == 0) { *nfactor = nf; return name; }
+#define ALGO_ALIAS_PARAM(alias, name, p) \
+  if (strcasecmp(alias, lookup_alias) == 0) { *param = p; return name; }
 #define ALGO_ALIAS(alias, name) \
   if (strcasecmp(alias, lookup_alias) == 0) return name;
 
-  ALGO_ALIAS_NF("scrypt", "ckolivas", 10);
-  ALGO_ALIAS_NF("scrypt", "ckolivas", 10);
-  ALGO_ALIAS_NF("adaptive-n-factor", "ckolivas", 11);
-  ALGO_ALIAS_NF("adaptive-nfactor", "ckolivas", 11);
-  ALGO_ALIAS_NF("nscrypt", "ckolivas", 11);
-  ALGO_ALIAS_NF("adaptive-nscrypt", "ckolivas", 11);
-  ALGO_ALIAS_NF("adaptive-n-scrypt", "ckolivas", 11);
+  ALGO_ALIAS_PARAM("scrypt", "ckolivas", 10);
+  ALGO_ALIAS_PARAM("scrypt", "ckolivas", 10);
+  ALGO_ALIAS_PARAM("adaptive-n-factor", "ckolivas", 11);
+  ALGO_ALIAS_PARAM("adaptive-nfactor", "ckolivas", 11);
+  ALGO_ALIAS_PARAM("nscrypt", "ckolivas", 11);
+  ALGO_ALIAS_PARAM("adaptive-nscrypt", "ckolivas", 11);
+  ALGO_ALIAS_PARAM("adaptive-n-scrypt", "ckolivas", 11);
+  ALGO_ALIAS_PARAM("cryptonight", "cryptonight", 1);
+  ALGO_ALIAS_PARAM("monero", "cryptonight", 7);
+  ALGO_ALIAS_PARAM("xmr", "cryptonight", 7);
+  ALGO_ALIAS_PARAM("xmrv7", "cryptonight", 7);
+  ALGO_ALIAS_PARAM("xmr7", "cryptonight", 7);
+  ALGO_ALIAS_PARAM("stellite", "cryptonight", 3);
+  ALGO_ALIAS_PARAM("graft", "cryptonight", 8);
   ALGO_ALIAS("x11mod", "darkcoin-mod");
   ALGO_ALIAS("x11", "darkcoin-mod");
   ALGO_ALIAS("x13mod", "marucoin-mod");
@@ -1407,24 +1414,50 @@ void set_algorithm(algorithm_t* algo, const char* newname_alias)
 {
   const char *newname;
 
+  //load previous cryptonight version value if any
+  uint8_t old_cn_version = ((algo->cryptonight_version) ? algo->cryptonight_version : 0);
+
   //load previous algorithm nfactor in case nfactor was applied before algorithm... or default to 10
   uint8_t old_nfactor = ((algo->nfactor) ? algo->nfactor : 0);
+
   //load previous kernel file name if was applied before algorithm...
   const char *kernelfile = algo->kernelfile;
-  uint8_t nfactor = 10;
 
-  if (!(newname = lookup_algorithm_alias(newname_alias, &nfactor))) {
+  //lookup algorithm alias
+  uint8_t param = 0;
+  if (!(newname = lookup_algorithm_alias(newname_alias, &param))) {
     newname = newname_alias;
   }
 
   copy_algorithm_settings(algo, newname);
 
-  // use old nfactor if it was previously set and is different than the one set by alias
-  if ((old_nfactor > 0) && (old_nfactor != nfactor)) {
-    nfactor = old_nfactor;
+  //set nfactor
+  uint8_t nfactor;
+
+  //set default nfactor version if not returned by alias lookup
+  if (param == 0) {
+    param = 10;
   }
 
+  //use old nfactor if it was previously set and is different than the one set by alias
+  nfactor = (((old_nfactor > 0) && (old_nfactor != param)) ? old_nfactor : param );
+
   set_algorithm_nfactor(algo, nfactor);
+
+  //cryptonight version
+  if (algo->type == ALGO_CRYPTONIGHT) {
+    uint8_t cryptonight_version;
+
+    //set default cryptonight version if not returned by alias lookup
+    if (param == 0) {
+      param = 1;
+    }
+
+    //use old cryptonight version if it was previously set and is different than the one set by alias
+    cryptonight_version = (((old_cn_version > 0) && (old_cn_version != param)) ? old_cn_version : param );
+
+    algo->cryptonight_version = cryptonight_version;
+  }
 
   //reapply kernelfile if was set
   if (!empty_string(kernelfile)) {
@@ -1437,27 +1470,29 @@ void set_algorithm_nfactor(algorithm_t* algo, const uint8_t nfactor)
   algo->nfactor = nfactor;
   algo->n = (1 << nfactor);
 
-  //adjust algo type accordingly
   switch (algo->type)
   {
-  case ALGO_SCRYPT:
-    //if nfactor isnt 10, switch to NSCRYPT
-    if (algo->nfactor != 10)
-      algo->type = ALGO_NSCRYPT;
-    break;
-    //nscrypt
-  case ALGO_NSCRYPT:
-    //if nfactor is 10, switch to SCRYPT
-    if (algo->nfactor == 10)
-      algo->type = ALGO_SCRYPT;
-    break;
+    //only apply if algo is scrypt or nscrypt
+    case ALGO_NSCRYPT:
+    case ALGO_SCRYPT:
+      //if nfactor is 10, switch to SCRYPT
+      if (algo->nfactor == 10) {
+        algo->type = ALGO_SCRYPT;
+      }
+      //otherwise use Nscrypt
+      else {
+        algo->type = ALGO_NSCRYPT;
+      }
+
+      break;
+
     //ignore rest
-  default:
-    break;
+    default:
+      break;
   }
 }
 
 bool cmp_algorithm(const algorithm_t* algo1, const algorithm_t* algo2)
 {
-  return (!safe_cmp(algo1->name, algo2->name) && !safe_cmp(algo1->kernelfile, algo2->kernelfile) && (algo1->nfactor == algo2->nfactor));
+  return (!safe_cmp(algo1->name, algo2->name) && !safe_cmp(algo1->kernelfile, algo2->kernelfile) && (algo1->nfactor == algo2->nfactor) && (algo1->cryptonight_version == algo2->cryptonight_version));
 }

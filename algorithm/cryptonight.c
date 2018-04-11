@@ -325,7 +325,7 @@ void cryptonight(uint8_t *Output, uint8_t *Input, uint32_t Length, int Variant)
 void cryptonight_regenhash(struct work *work)
 {
 	uint32_t data[20];
-	int variant = monero_variant(work);
+	int variant = cryptonight_variant(work);
 	uint32_t *ohash = (uint32_t *)(work->hash);
 	
 	memcpy(data, work->data, work->XMRBlobLen);
@@ -334,7 +334,7 @@ void cryptonight_regenhash(struct work *work)
 	
 	char *tmpdbg = bin2hex((uint8_t*) ohash, 32);
 	
-	applog(LOG_DEBUG, "cryptonight_regenhash_var%d: %s", variant, tmpdbg);
+	applog(LOG_DEBUG, "cryptonight_regenhash (variant %d): %s", variant, tmpdbg);
 	
 	free(tmpdbg);
 	
