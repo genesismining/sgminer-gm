@@ -1732,7 +1732,7 @@ Changes the multipool strategy to quota based balance.
 
 ### rotate
 
-Changes the multipool strategy to rotate between pools after a certain amount of time in seconds.
+Change multipool strategy from failover to regularly rotate at N minutes (default: 0)
 
 *Available*: Global
 
@@ -1740,9 +1740,9 @@ Changes the multipool strategy to rotate between pools after a certain amount of
 
 *Command Line Syntax:* `--rotate <value>`
 
-*Argument:* `number` Number of seconds between 0 and 9999 before switching to the next pool
+*Argument:* `number` Number of minutes before switching to the next pool
 
-*Default:* None
+*Default:* 0
 
 [Top](#configuration-and-command-line-options) :: [Config-file and CLI options](#config-file-and-cli-options) :: [Pool Strategy Options](#pool-strategy-options)
 
